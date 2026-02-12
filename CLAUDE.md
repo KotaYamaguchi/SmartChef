@@ -1,0 +1,4 @@
+- 返信する時に必ずDevelopmentLog.mdに私とあなたのやりとりの内容と実装した内容を適切にまとめて記録してください．記録はファイルに追記する形で行います．
+- CODEBASE_GUIDE.mdはこのプロジェクトのコードベースのガイドラインを記録するファイルです．新機能の実装や既存機能の変更など、コードベースの変更が行われた場合は必ずCODEBASE_GUIDE.mdを更新してください．
+- IMPLEMENTATION_LOG.mdはこのプロジェクトの実装履歴を記録するファイルです．新機能の実装や既存機能の変更など、コードベースの変更が行われた場合は必ずIMPLEMENTATION_LOG.mdを更新してください．
+- CODEBASE_GUIDE.mdとIMPLEMENTATION_LOG.mdは必要に応じて参照してください．

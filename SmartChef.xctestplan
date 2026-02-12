@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "7651EE11-3E81-405A-BB7D-AF4D372816DF",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:SmartChef.xcodeproj",
+      "identifier" : "8A87AF8A2F34CB3600FDA010",
+      "name" : "SmartChef"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:SmartChef.xcodeproj",
+        "identifier" : "AA000001000000000000001E",
+        "name" : "SmartChefTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -1,0 +1,59 @@
+[ShoppingFill][prefetchDishes] dishes=["卵サラダ", "鶏むね肉のソテー", "鶏むね肉の照り焼き"]
+[ShoppingFill][prefetchDishes] 自動追加アイテム削除数=19
+[ShoppingFill][prefetchDishes] pendingShoppingDishes セット完了: ["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"]
+[ShoppingFill][prefetchRecipes] 要求dishes=["卵サラダ", "鶏むね肉のソテー", "鶏むね肉の照り焼き"]
+[ShoppingFill][prefetchRecipes] 生成開始: 卵サラダ | generatingDishes=["卵サラダ"]
+[ShoppingFill][prefetchRecipes] 生成開始: 鶏むね肉のソテー | generatingDishes=["卵サラダ", "鶏むね肉のソテー"]
+[ShoppingFill][prefetchRecipes] 生成開始: 鶏むね肉の照り焼き | generatingDishes=["卵サラダ", "鶏むね肉の照り焼き", "鶏むね肉のソテー"]
+[ShoppingFill][onChange] generatingDishes=["卵サラダ", "鶏むね肉の照り焼き", "鶏むね肉のソテー"] | pending=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"] | isFilling=false
+[ShoppingFill][onChange]   dish=鶏むね肉のソテー cached=false errored=false
+[ShoppingFill][onChange] allSettled=false
+[ShoppingFill][prefetchRecipes] ✅ 生成完了: 鶏むね肉のソテー 食材数=4 | generatingDishes残=["鶏むね肉の照り焼き", "卵サラダ"]
+[ShoppingFill][prefetchRecipes] generatingDishes更新後=["卵サラダ", "鶏むね肉の照り焼き"]
+[ShoppingFill][onChange] generatingDishes=["卵サラダ", "鶏むね肉の照り焼き"] | pending=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"] | isFilling=false
+[ShoppingFill][onChange]   dish=鶏むね肉のソテー cached=true errored=false
+[ShoppingFill][onChange]   dish=鶏むね肉の照り焼き cached=false errored=false
+[ShoppingFill][onChange] allSettled=false
+[ShoppingFill][prefetchRecipes] ✅ 生成完了: 鶏むね肉の照り焼き 食材数=9 | generatingDishes残=["卵サラダ"]
+[ShoppingFill][prefetchRecipes] generatingDishes更新後=["卵サラダ"]
+[ShoppingFill][onChange] generatingDishes=["卵サラダ"] | pending=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"] | isFilling=false
+[ShoppingFill][onChange]   dish=鶏むね肉のソテー cached=true errored=false
+[ShoppingFill][onChange]   dish=鶏むね肉の照り焼き cached=true errored=false
+[ShoppingFill][onChange]   dish=卵サラダ cached=false errored=false
+[ShoppingFill][onChange] allSettled=false
+[ShoppingFill][prefetchRecipes] ✅ 生成完了: 卵サラダ 食材数=9 | generatingDishes残=[]
+[ShoppingFill][prefetchRecipes] generatingDishes更新後=[]
+[ShoppingFill][onChange] generatingDishes=[] | pending=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"] | isFilling=false
+[ShoppingFill][onChange]   dish=鶏むね肉のソテー cached=true errored=false
+[ShoppingFill][onChange]   dish=鶏むね肉の照り焼き cached=true errored=false
+[ShoppingFill][onChange]   dish=卵サラダ cached=true errored=false
+[ShoppingFill][onChange] allSettled=true
+[ShoppingFill][onChange] → autoFillShoppingList 開始 dishes=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"]
+[ShoppingFill][autoFill] 開始 dishes=["鶏むね肉のソテー", "鶏むね肉の照り焼き", "卵サラダ"]
+[ShoppingFill][autoFill] 有効レシピ数=3/3: ["鶏むね肉の照り焼き", "卵サラダ", "鶏むね肉のソテー"]
+[ShoppingFill][autoFill] 対象MealPlan数=3 mode=evening
+[ShoppingFill][fillShoppingList] ▶️ 開始 recipes=["鶏むね肉の照り焼き", "卵サラダ", "鶏むね肉のソテー"] mealPlans=3 stock=8 existingShopping=0
+[ShoppingFill][fillShoppingList] dishToMealLabel=["鶏むね肉の照り焼き": "夕食", "鶏むね肉のソテー": "昼食", "卵サラダ": "朝食"]
+[ShoppingFill][fillShoppingList] 収集食材数=22
+[ShoppingFill][fillShoppingList] AI mergeShoppingIngredients 呼び出し中...
+[ShoppingFill][fillShoppingList] マージ結果=16件: ["鶏肉", "にんにく", "しょうゆ", "みりん", "砂糖", "酒", "サラダ油", "ごま油", "黒胡椒", "卵", "鶏むね肉", "にんじん", "塩", "胡椒", "レモン汁", "マヨネーズ"]
+[ShoppingFill][fillShoppingList] 在庫名=["米", "牛乳", "鶏もも肉", "卵", "豚肉", "醤油", "納豆", "豆腐"] | 既存買い物=[]
+[ShoppingFill][fillShoppingList] ➕ 追加: 鶏肉 [肉類] 300g source=鶏むね肉の照り焼き（夕食）、卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: にんにく [野菜] 2片 source=鶏むね肉の照り焼き（夕食）、卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: しょうゆ [調味料] 大さじ2 source=鶏むね肉の照り焼き（夕食）
+[ShoppingFill][fillShoppingList] ➕ 追加: みりん [調味料] 大さじ1 source=鶏むね肉の照り焼き（夕食）
+[ShoppingFill][fillShoppingList] ➕ 追加: 砂糖 [調味料] 大さじ1 source=鶏むね肉の照り焼き（夕食）
+[ShoppingFill][fillShoppingList] ➕ 追加: 酒 [調味料] 大さじ1 source=鶏むね肉の照り焼き（夕食）
+[ShoppingFill][fillShoppingList] ➕ 追加: サラダ油 [その他] 大さじ3 source=鶏むね肉の照り焼き（夕食）、卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: ごま油 [その他] 小さじ1 source=鶏むね肉の照り焼き（夕食）
+[ShoppingFill][fillShoppingList] ➕ 追加: 黒胡椒 [調味料] 適量 source=鶏むね肉の照り焼き（夕食）、鶏むね肉のソテー（昼食）
+[ShoppingFill][fillShoppingList] スキップ（在庫あり）: 卵
+[ShoppingFill][fillShoppingList] ➕ 追加: 鶏むね肉 [肉類] 2枚 source=鶏むね肉のソテー（昼食）
+[ShoppingFill][fillShoppingList] ➕ 追加: にんじん [野菜] 1本 source=卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: 塩 [調味料] 小さじ2 source=卵サラダ（朝食）、鶏むね肉のソテー（昼食）
+[ShoppingFill][fillShoppingList] ➕ 追加: 胡椒 [調味料] 少々 source=卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: レモン汁 [調味料] 大さじ1 source=卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] ➕ 追加: マヨネーズ [調味料] 大さじ1 source=卵サラダ（朝食）
+[ShoppingFill][fillShoppingList] context.save() 前 挿入予定数=15
+[ShoppingFill][fillShoppingList] ✅ 保存完了
+[ShoppingFill][autoFill] ✅ fillShoppingList 完了
