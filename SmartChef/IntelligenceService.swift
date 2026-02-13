@@ -634,7 +634,8 @@ final class IntelligenceService {
             let rawItems = try parseJSON(response.content, as: [ReceiptItemRaw].self)
             let today = Date()
             return rawItems.map { item in
-                let category = Category.allCases.first { $0.rawValue == item.category } ?? .other
+                let category =
+                    FoodCategory.allCases.first { $0.rawValue == item.category } ?? .other
                 let daysUntilExpiry = max(1, item.estimatedDaysUntilExpiry)
                 let deadline = Calendar.current.date(
                     byAdding: .day, value: daysUntilExpiry, to: today)
@@ -723,7 +724,7 @@ struct MergedShoppingIngredient: Codable {
     var combinedAmount: String
     /// 使用する料理名リスト
     var sources: [String]
-    /// Category の rawValue（例: "肉類"、"野菜"）
+    /// FoodCategory の rawValue（例: "肉類"、"野菜"）
     var category: String
 }
 

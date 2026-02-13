@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
 
 // MARK: - レシピ詳細モデル (Codable)
 
@@ -27,14 +28,14 @@ struct RecipeDetail: Codable {
 struct ScannedItem: Identifiable {
     var id = UUID()
     var name: String
-    var category: Category
+    var category: FoodCategory
     var count: Int
     var deadline: Date?
     var hasDeadline: Bool
 
     init(
         name: String,
-        category: Category = .other,
+        category: FoodCategory = .other,
         count: Int = 1,
         deadline: Date? = nil,
         hasDeadline: Bool = false
@@ -51,7 +52,7 @@ struct ScannedItem: Identifiable {
 
 struct BarcodeCacheEntry: Codable {
     var name: String
-    var category: Category
+    var category: FoodCategory
 }
 
 final class BarcodeCache {
@@ -79,7 +80,7 @@ final class BarcodeCache {
         cache[barcode]
     }
 
-    func set(_ barcode: String, name: String, category: Category) {
+    func set(_ barcode: String, name: String, category: FoodCategory) {
         var current = cache
         current[barcode] = BarcodeCacheEntry(name: name, category: category)
         cache = current
@@ -122,17 +123,51 @@ enum MealPlanGenerationMode: String, CaseIterable {
 }
 
 // カテゴリはそのままEnumでOK
-enum Category: String, Codable, CaseIterable {
+enum FoodCategory: String, Codable, CaseIterable {
     case vegetables = "野菜"
     case meat = "肉類"
     case seafood = "魚介類"
     case dairy = "乳製品"
-    case egg = "卵・日配品"
+    case egg = "卵"
     case fruits = "果物"
     case seasoning = "調味料"
-    case grain = "米・麺類"
+    case grain = "主食"
     case drink = "飲料"
     case other = "その他"
+
+    var iconName: String? {
+        switch self {
+        case .vegetables: return "food_category_icon_vegetable"
+        case .meat: return "food_category_icon_meat"
+        case .seafood: return "food_category_icon_fish"
+        case .dairy: return "food_category_icon_milk"
+        case .egg: return "food_category_icon_egg"
+        case .fruits: return "food_category_icon_fruits"
+        case .seasoning: return "food_category_icon_seasoning"
+        case .grain: return "food_category_icon_bread"
+        case .drink: return "food_category_icon_drink"
+        default: return nil
+        }
+    }
+}
+
+// MARK: - カテゴリカラー拡張
+
+extension FoodCategory {
+    var color: Color {
+        switch self {
+        case .vegetables: return .green
+        case .meat: return .red
+        case .seafood: return .blue
+        case .dairy: return .yellow
+        case .egg: return .orange
+        case .fruits: return .pink
+        case .seasoning: return .brown
+        case .grain: return .indigo
+        case .drink: return .cyan
+        case .other: return .gray
+        }
+    }
 }
 
 enum MealType: String, Codable, CaseIterable {
@@ -145,11 +180,11 @@ enum MealType: String, Codable, CaseIterable {
 final class StockItem {
     var id: UUID
     var name: String
-    var category: Category
+    var category: FoodCategory
     var deadline: Date?
     var count: Int
 
-    init(name: String, category: Category, deadline: Date? = nil, count: Int = 1) {
+    init(name: String, category: FoodCategory, deadline: Date? = nil, count: Int = 1) {
         self.id = UUID()
         self.name = name
         self.category = category
@@ -162,7 +197,7 @@ final class StockItem {
 final class ShoppingItem {
     var id: UUID
     var name: String
-    var category: Category
+    var category: FoodCategory
     var count: Int
     var isSelected: Bool
 
@@ -173,7 +208,7 @@ final class ShoppingItem {
 
     init(
         name: String,
-        category: Category,
+        category: FoodCategory,
         count: Int = 1,
         isSelected: Bool = false,
         sourceMenuName: String? = nil,

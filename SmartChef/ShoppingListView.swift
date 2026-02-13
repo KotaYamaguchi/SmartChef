@@ -4,8 +4,9 @@
 //
 //  Created by Kota Yamaguchi on 2026/02/05.
 //
-import SwiftUI
+
 import SwiftData
+import SwiftUI
 
 // MARK: - 買い物リスト画面
 
@@ -16,8 +17,8 @@ struct ShoppingListView: View {
     @State private var showAddSheet = false
 
     // カテゴリ別にグループ化
-    private var grouped: [(Category, [ShoppingItem])] {
-        let order = Category.allCases
+    private var grouped: [(FoodCategory, [ShoppingItem])] {
+        let order = FoodCategory.allCases
         return order.compactMap { cat in
             let items = shoppingList.filter { $0.category == cat }
             return items.isEmpty ? nil : (cat, items)
@@ -35,16 +36,17 @@ struct ShoppingListView: View {
                     ContentUnavailableView(
                         "買い物リストは空です",
                         systemImage: "cart",
-                        description: Text("「+」ボタンから追加できます\n買い物後は冷蔵庫タブのカメラボタンでレシートをスキャンして在庫を追加してください")
+                        description: Text(
+                            "「+」ボタンから追加できます\n買い物後は冷蔵庫タブのカメラボタンでレシートをスキャンして在庫を追加してください")
                     )
                 } else {
                     List {
                         // 購入済みヒント
                         if checkedCount > 0 {
                             Section {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "camera.badge.plus")
-                                        .foregroundStyle(.blue)
+                                HStack(alignment:.top,spacing: 10) {
+                                    Image(systemName: "lightbulb.circle.fill")
+                                        .foregroundStyle(.yellow)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("\(checkedCount)品購入済み")
                                             .font(.subheadline.weight(.medium))
@@ -53,18 +55,34 @@ struct ShoppingListView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                                .listRowBackground(Color.blue.opacity(0.06))
+                                .listRowBackground(Color.yellow.opacity(0.06))
                             }
                         }
 
                         ForEach(grouped, id: \.0) { category, items in
-                            Section(category.rawValue) {
+                            Section(
+                                header: Label {
+                                    Text(category.rawValue)
+                                } icon: {
+                                    if let iconName = category.iconName {
+                                        Image(iconName)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 20, height: 20)
+                                    } else {
+                                        Image(systemName: "circle.fill")
+                                            .foregroundStyle(category.color)
+                                            .font(.caption2)
+                                    }
+                                }
+                            ) {
                                 ForEach(items) { item in
                                     ShoppingItemRow(item: item)
                                 }
                                 .onDelete { indexSet in
                                     for index in indexSet {
-                                        modelContext.delete(items[index])
+                                        let itemToDelete = items[index]
+                                        modelContext.delete(itemToDelete)
                                     }
                                 }
                             }
@@ -76,7 +94,9 @@ struct ShoppingListView: View {
             .navigationTitle("買い物リスト")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAddSheet = true } label: {
+                    Button {
+                        showAddSheet = true
+                    } label: {
                         Image(systemName: "plus")
                     }
                 }
@@ -99,6 +119,7 @@ struct ShoppingListView: View {
                     modelContext.insert(newItem)
                     try? modelContext.save()
                 }
+                .presentationDetents([.large])
             }
         }
     }
@@ -163,13 +184,13 @@ private struct ShoppingItemRow: View {
 // MARK: - 手動追加シート
 
 private struct AddShoppingItemSheet: View {
-    let onAdd: (String, Category, Int) -> Void
+    let onAdd: (String, FoodCategory, Int) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name:     String   = ""
-    @State private var category: Category = .vegetables
-    @State private var count:    Int      = 1
+    @State private var name: String = ""
+    @State private var category: FoodCategory = .vegetables
+    @State private var count: Int = 1
 
     var body: some View {
         NavigationStack {
@@ -177,12 +198,12 @@ private struct AddShoppingItemSheet: View {
                 Section("基本情報") {
                     TextField("品名", text: $name)
                         .autocorrectionDisabled()
-                    Picker("カテゴリー", selection: $category) {
-                        ForEach(Category.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
-                        }
-                    }
-                    Stepper("個数: \(count)", value: $count, in: 1...100)
+                }
+                Section("カテゴリー") {
+                    CategoryGridPicker(selection: $category)
+                }
+                Section("数量") {
+                    Stepper("\(count)個", value: $count, in: 1...100)
                 }
             }
             .navigationTitle("買い物を追加")
@@ -203,6 +224,6 @@ private struct AddShoppingItemSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

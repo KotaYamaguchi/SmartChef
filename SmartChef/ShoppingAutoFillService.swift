@@ -21,7 +21,7 @@ enum ShoppingAutoFillService {
         let ingredientAmount: String
         var isSelected: Bool = true
         let sourceMenuName: String  // "鶏の照り焼き（夕食）" などの表示用
-        let category: Category
+        let category: FoodCategory
     }
 
     // MARK: - メイン処理
@@ -88,8 +88,8 @@ enum ShoppingAutoFillService {
                 continue
             }
 
-            // Category に変換
-            let category = Category.allCases.first { $0.rawValue == item.category } ?? .other
+            // FoodCategory に変換
+            let category = FoodCategory.allCases.first { $0.rawValue == item.category } ?? .other
 
             // sourceMenuName 作成
             let sourceLabel = item.sources.map { dish -> String in

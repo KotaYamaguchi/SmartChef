@@ -73,12 +73,20 @@ struct IngredientSelectionSheet: View {
 
                                     Spacer()
 
-                                    Text(item.category.rawValue)
-                                        .font(.caption2)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.secondary.opacity(0.1))
-                                        .cornerRadius(4)
+                                    HStack(spacing: 4) {
+                                        if let iconName = item.category.iconName {
+                                            Image(iconName)
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(width: 14, height: 14)
+                                        }
+                                        Text(item.category.rawValue)
+                                    }
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(4)
                                 }
                                 .contentShape(Rectangle())
                                 .onTapGesture {

@@ -303,7 +303,6 @@ struct ScannerView: View {
         .onDisappear {
             cameraController.stop()
         }
-        .animation(.spring(duration: 0.3), value: barcodeToastMessage)
     }
 
     // MARK: - サブビュー
@@ -387,7 +386,7 @@ struct ScannerView: View {
         }
     }
 
-    private func addBarcodeItemToStock(name: String, category: Category) {
+    private func addBarcodeItemToStock(name: String, category: FoodCategory) {
         let item = StockItem(name: name, category: category)
         modelContext.insert(item)
         try? modelContext.save()
@@ -483,16 +482,16 @@ struct ScannerView: View {
 
 struct BarcodeNameInputSheet: View {
     let barcode: String
-    let onRegister: (String, Category) -> Void
+    let onRegister: (String, FoodCategory) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var category: Category = .other
+    @State private var category: FoodCategory = .other
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                Section("基本情報") {
                     HStack {
                         Image(systemName: "barcode")
                             .foregroundStyle(.secondary)
@@ -500,24 +499,23 @@ struct BarcodeNameInputSheet: View {
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                     }
+                    TextField("商品名を入力", text: $name)
+                        .autocorrectionDisabled()
+                }
+                Section("カテゴリー") {
+                    CategoryGridPicker(selection: $category)
+                }
+                Section {
                     Text("このバーコードは初めてスキャンされました。商品名とカテゴリを入力すると、次回から自動で認識されます。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                Section("商品情報") {
-                    TextField("商品名・食材名", text: $name)
-                    Picker("カテゴリー", selection: $category) {
-                        ForEach(Category.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
-                        }
-                    }
                 }
             }
             .navigationTitle("商品を登録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("スキップ") { dismiss() }
+                    Button("キャンセル") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("登録して追加") {
@@ -531,6 +529,6 @@ struct BarcodeNameInputSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

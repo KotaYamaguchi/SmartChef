@@ -191,7 +191,7 @@ struct DataMockService {
     // MARK: - データプール
 
     /// 在庫食材プール（名前とカテゴリのペア）
-    private static let stockItemPool: [(name: String, category: Category)] = [
+    private static let stockItemPool: [(name: String, category: FoodCategory)] = [
         // 野菜
         ("キャベツ", .vegetables), ("ほうれん草", .vegetables), ("にんじん", .vegetables),
         ("大根", .vegetables), ("ブロッコリー", .vegetables), ("トマト", .vegetables),
@@ -228,7 +228,7 @@ struct DataMockService {
     ]
 
     /// 買い物リスト用の食材プール
-    private static let shoppingItemPool: [(name: String, category: Category)] = [
+    private static let shoppingItemPool: [(name: String, category: FoodCategory)] = [
         ("玉ねぎ", .vegetables), ("にんじん", .vegetables), ("じゃがいも", .vegetables),
         ("トマト", .vegetables), ("ほうれん草", .vegetables), ("キャベツ", .vegetables),
         ("豚バラ肉", .meat), ("鶏もも肉", .meat), ("ひき肉", .meat),
@@ -265,7 +265,7 @@ struct DataMockService {
         "豚の生姜焼き・白米・キャベツ千切り", "ハンバーグ・ポテトフライ",
         "焼き肉・白米", "鶏むね肉のソテー・ブロッコリー", "肉じゃが・味噌汁",
         "麻婆豆腐・白米", "回鍋肉・白米", "酢豚・白米",
-        "鮭の塩焼き・味噌汁・ご飯", "刺身定食", "煮魚定食",
+        "鮭의 塩焼き・味噌汁・ご飯", "刺身定食", "煮魚定食",
         "鍋料理", "おでん", "すき焼き", "グラタン",
         "クリームシチュー", "ビーフシチュー", "豚汁・ご飯",
         "チキン南蛮・白米", "とんかつ定食", "エビフライ定食",

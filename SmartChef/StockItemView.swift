@@ -1,3 +1,4 @@
+import SwiftData
 //
 //  ItemStockView.swift
 //  SmartChef
@@ -5,7 +6,6 @@
 //  Created by Kota Yamaguchi on 2026/02/05.
 //
 import SwiftUI
-import SwiftData
 
 struct ItemStockView: View {
     @Environment(\.modelContext) private var modelContext
@@ -25,12 +25,12 @@ struct ItemStockView: View {
         }
     }
 
-    private var groupedItems: [Category: [StockItem]] {
+    private var groupedItems: [FoodCategory: [StockItem]] {
         Dictionary(grouping: filteredItems, by: { $0.category })
     }
 
-    private var categories: [Category] {
-        Category.allCases.filter { groupedItems[$0] != nil }
+    private var categories: [FoodCategory] {
+        FoodCategory.allCases.filter { groupedItems[$0] != nil }
     }
 
     var body: some View {
@@ -60,7 +60,7 @@ struct ItemStockView: View {
                     Button {
                         showScanner = true
                     } label: {
-                        Label("追加", systemImage: "camera.badge.plus")
+                        Label("追加", systemImage: "plus")
                     }
                 }
             }
@@ -87,18 +87,25 @@ struct ItemStockView: View {
         }
     }
 
-    private func categoryHeader(_ category: Category) -> some View {
+    private func categoryHeader(_ category: FoodCategory) -> some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(category.color)
-                .frame(width: 8, height: 8)
+            if let iconName = category.iconName {
+                Image(iconName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+            } else {
+                Circle()
+                    .fill(category.color)
+                    .frame(width: 8, height: 8)
+            }
             Text(category.rawValue)
         }
     }
 
     // MARK: - 削除処理
 
-    private func deleteItem(at offsets: IndexSet, in category: Category) {
+    private func deleteItem(at offsets: IndexSet, in category: FoodCategory) {
         let itemsInSection = groupedItems[category] ?? []
         for index in offsets {
             modelContext.delete(itemsInSection[index])
@@ -122,7 +129,7 @@ private struct StockItemRow: View {
 
     private var expiryColor: Color {
         guard let days = daysUntilExpiry else { return .secondary }
-        if days < 0  { return .red }
+        if days < 0 { return .red }
         if days <= 1 { return .red }
         if days <= 3 { return .orange }
         if days <= 7 { return .yellow }
@@ -131,7 +138,7 @@ private struct StockItemRow: View {
 
     private var expiryText: String? {
         guard let days = daysUntilExpiry else { return nil }
-        if days < 0  { return "期限切れ" }
+        if days < 0 { return "期限切れ" }
         if days == 0 { return "今日まで" }
         if days == 1 { return "あと1日" }
         return "あと\(days)日"

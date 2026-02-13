@@ -84,7 +84,7 @@ struct SettingsView: View {
                             set: { settings.autoDeleteMatchedShoppingItems = $0 }
                         )
                     ) {
-                        Label("買い物リストを自動照合", systemImage: "cart.badge.checkmark")
+                        Label("買い物リストを自動照合", systemImage: "rectangle.and.text.magnifyingglass")
                     }
                 } header: {
                     Label("スキャン設定", systemImage: "barcode.viewfinder")
@@ -155,12 +155,14 @@ struct SettingsView: View {
                         showClearBarcodeConfirm = true
                     } label: {
                         Label("バーコードキャッシュをリセット", systemImage: "barcode")
+                            .foregroundStyle(.red)
                     }
 
                     Button(role: .destructive) {
                         showClearAllDataConfirm = true
                     } label: {
                         Label("すべてのデータを削除", systemImage: "trash")
+                            .foregroundStyle(.red)
                     }
                 } header: {
                     Label("データ管理", systemImage: "externaldrive")

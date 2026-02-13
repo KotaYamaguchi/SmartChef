@@ -910,13 +910,13 @@ struct StockUpdateSheet: View {
     @State private var usageCounts: [UUID: Int] = [:]
 
     // 在庫が存在するカテゴリだけを表示順で返す
-    private var availableCategories: [Category] {
+    private var availableCategories: [FoodCategory] {
         let withStock = stockItems.filter { $0.count > 0 }
         let present = Set(withStock.map { $0.category })
-        return Category.allCases.filter { present.contains($0) }
+        return FoodCategory.allCases.filter { present.contains($0) }
     }
 
-    private func items(in category: Category) -> [StockItem] {
+    private func items(in category: FoodCategory) -> [StockItem] {
         stockItems.filter { $0.category == category && $0.count > 0 }
     }
 
@@ -967,7 +967,20 @@ struct StockUpdateSheet: View {
                     }
                 } else {
                     ForEach(availableCategories, id: \.self) { category in
-                        Section(category.rawValue) {
+                        Section(
+                            header: HStack {
+                                if let iconName = category.iconName {
+                                    Image(iconName)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    Image(systemName: "circle.fill")
+                                        .foregroundStyle(category.color)
+                                }
+                                Text(category.rawValue)
+                            }
+                        ) {
                             ForEach(items(in: category)) { item in
                                 StockUsageRow(
                                     item: item,

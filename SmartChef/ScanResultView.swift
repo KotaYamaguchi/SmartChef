@@ -5,8 +5,8 @@
 //  Created by Kota Yamaguchi on 2026/02/12.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 // MARK: - スキャン結果確認・一括登録画面
 
@@ -36,9 +36,12 @@ struct ScanResultView: View {
             // 認識件数ヘッダー
             Section {
                 HStack(spacing: 10) {
-                    Image(systemName: items.isEmpty ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .foregroundStyle(items.isEmpty ? .orange : .green)
-                        .font(.title3)
+                    Image(
+                        systemName: items.isEmpty
+                            ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(items.isEmpty ? .orange : .green)
+                    .font(.title3)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(items.isEmpty ? "食材が認識されませんでした" : "\(items.count)品目を認識しました")
                             .font(.subheadline.weight(.semibold))
@@ -49,7 +52,8 @@ struct ScanResultView: View {
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(items.isEmpty ? Color.orange.opacity(0.08) : Color.green.opacity(0.08))
+                        .fill(
+                            items.isEmpty ? Color.orange.opacity(0.08) : Color.green.opacity(0.08))
                 )
             }
 
@@ -203,10 +207,6 @@ struct ScannedItemEditRow: View {
                 }
             } label: {
                 HStack(spacing: 10) {
-                    // カテゴリカラードット
-                    Circle()
-                        .fill(item.category.color)
-                        .frame(width: 10, height: 10)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name.isEmpty ? "（名前未設定）" : item.name)
@@ -242,7 +242,7 @@ struct ScannedItemEditRow: View {
             if isExpanded {
                 Divider().padding(.vertical, 4)
 
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     // 食材名
                     HStack {
                         Text("食材名")
@@ -254,18 +254,11 @@ struct ScannedItemEditRow: View {
                     }
 
                     // カテゴリ
-                    HStack {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("カテゴリ")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .frame(width: 56, alignment: .leading)
-                        Picker("", selection: $item.category) {
-                            ForEach(Category.allCases, id: \.self) {
-                                Text($0.rawValue).tag($0)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                        CategoryGridPicker(selection: $item.category)
                     }
 
                     // 個数
@@ -312,25 +305,6 @@ struct ScannedItemEditRow: View {
     }
 }
 
-// MARK: - カテゴリカラー拡張
-
-extension Category {
-    var color: Color {
-        switch self {
-        case .vegetables:  return .green
-        case .meat:        return .red
-        case .seafood:     return .blue
-        case .dairy:       return .yellow
-        case .egg:         return .orange
-        case .fruits:      return .pink
-        case .seasoning:   return .brown
-        case .grain:       return .indigo
-        case .drink:       return .cyan
-        case .other:       return .gray
-        }
-    }
-}
-
 // MARK: - 手動追加シート（スキャン結果と親和性のあるUI）
 
 struct ManualScanItemSheet: View {
@@ -338,7 +312,7 @@ struct ManualScanItemSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var category: Category = .other
+    @State private var category: FoodCategory = .other
     @State private var count = 1
     @State private var hasDeadline = false
     @State private var deadline = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
@@ -349,12 +323,10 @@ struct ManualScanItemSheet: View {
                 Section("食材情報") {
                     TextField("食材名", text: $name)
                         .autocorrectionDisabled()
-                    Picker("カテゴリー", selection: $category) {
-                        ForEach(Category.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
-                        }
-                    }
                     Stepper("個数: \(count)個", value: $count, in: 1...100)
+                }
+                Section("カテゴリー") {
+                    CategoryGridPicker(selection: $category)
                 }
                 Section("賞味期限") {
                     Toggle("期限を設定", isOn: $hasDeadline)
