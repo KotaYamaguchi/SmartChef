@@ -12,24 +12,33 @@ import SwiftData
 
 enum ShoppingAutoFillService {
 
+    // MARK: - データモデル
+
+    /// 買い物リストへの追加候補
+    struct ShoppingItemCandidate: Identifiable, Hashable {
+        let id = UUID()
+        let name: String
+        let ingredientAmount: String
+        var isSelected: Bool = true
+        let sourceMenuName: String  // "鶏の照り焼き（夕食）" などの表示用
+        let category: Category
+    }
+
     // MARK: - メイン処理
 
-    /// レシピから不足食材を解析して買い物リストに追加する
+    /// レシピから不足食材を解析して候補リストを返す
     /// - Parameters:
-    ///   - recipes: dishName → RecipeDetail のマップ
-    ///   - mealPlans: 対象の食事計画（dish の食事タイプ特定に使用）
-    ///   - stockItems: 現在の在庫
-    ///   - existingShoppingItems: 現在の買い物リスト（重複追加を防ぐ）
-    ///   - context: SwiftData の ModelContext
-    static func fillShoppingList(
+    ///   - needsMerging: 食材をマージするかどうか（true: 自動, false: 手動）
+    /// - Returns: 追加候補のリスト（在庫・既存リストとの重複を除外済み）
+    static func analyzeMissingIngredients(
         recipes: [String: RecipeDetail],
         mealPlans: [MealPlan],
         stockItems: [StockItem],
         existingShoppingItems: [ShoppingItem],
-        context: ModelContext
-    ) async throws -> Int {
+        needsMerging: Bool = true
+    ) async throws -> [ShoppingItemCandidate] {
         print(
-            "[ShoppingFill][fillShoppingList] ▶️ 開始 recipes=\(recipes.keys) mealPlans=\(mealPlans.count) stock=\(stockItems.count) existingShopping=\(existingShoppingItems.count)"
+            "[ShoppingFill][analyze] ▶️ 開始 recipes=\(recipes.keys) mealPlans=\(mealPlans.count) merging=\(needsMerging)"
         )
 
         // 1. 料理名 → 食事タイプのマッピング（表示用ラベル作成に使用）
@@ -43,9 +52,8 @@ enum ShoppingAutoFillService {
                 dishToMealLabel[dish] = plan.mealType.rawValue
             }
         }
-        print("[ShoppingFill][fillShoppingList] dishToMealLabel=\(dishToMealLabel)")
 
-        // 2. 全レシピから食材を収集（dish, name, amount）
+        // 2. 全レシピから食材を収集
         var rawIngredients: [(name: String, amount: String, dish: String)] = []
         for (dishName, recipe) in recipes {
             for ingredient in recipe.ingredients {
@@ -55,38 +63,35 @@ enum ShoppingAutoFillService {
                 rawIngredients.append((name: trimmedName, amount: trimmedAmount, dish: dishName))
             }
         }
-        print("[ShoppingFill][fillShoppingList] 収集食材数=\(rawIngredients.count)")
-        guard !rawIngredients.isEmpty else {
-            print("[ShoppingFill][fillShoppingList] ⚠️ rawIngredients が空のため終了")
-            return 0
+        guard !rawIngredients.isEmpty else { return [] }
+
+        // 3. AI で類似食材を統合 or カテゴリ判定のみ
+        let analyzedIngredients: [MergedShoppingIngredient]
+        if needsMerging {
+            analyzedIngredients = try await IntelligenceService.shared.mergeShoppingIngredients(
+                rawIngredients)
+        } else {
+            analyzedIngredients = try await IntelligenceService.shared
+                .categorizeShoppingIngredients(rawIngredients)
         }
 
-        // 3. AI で類似食材を統合
-        print("[ShoppingFill][fillShoppingList] AI mergeShoppingIngredients 呼び出し中...")
-        let merged = try await IntelligenceService.shared.mergeShoppingIngredients(rawIngredients)
-        print("[ShoppingFill][fillShoppingList] マージ結果=\(merged.count)件: \(merged.map { $0.name })")
-
-        // 4. 在庫・既存買い物リストと照合して不足分だけ追加
+        // 4. 在庫・既存買い物リストと照合して不足分だけ抽出
         let stockNames = Set(stockItems.map { $0.name.lowercased() })
         let shoppingNames = Set(existingShoppingItems.map { $0.name.lowercased() })
-        print("[ShoppingFill][fillShoppingList] 在庫名=\(stockNames) | 既存買い物=\(shoppingNames)")
 
-        var insertedCount = 0
-        for item in merged {
+        var candidates: [ShoppingItemCandidate] = []
+
+        for item in analyzedIngredients {
             let lower = item.name.lowercased()
-            if stockNames.contains(lower) {
-                print("[ShoppingFill][fillShoppingList] スキップ（在庫あり）: \(item.name)")
-                continue
-            }
-            if shoppingNames.contains(lower) {
-                print("[ShoppingFill][fillShoppingList] スキップ（買い物リストに既存）: \(item.name)")
+            // マージしないモードでも、全く同じ名前があれば除外する
+            if stockNames.contains(lower) || shoppingNames.contains(lower) {
                 continue
             }
 
-            // Category に変換（マッチしなければ .other）
+            // Category に変換
             let category = Category.allCases.first { $0.rawValue == item.category } ?? .other
 
-            // sourceMenuName: "鶏の照り焼き（夕食）" のような形式で表示
+            // sourceMenuName 作成
             let sourceLabel = item.sources.map { dish -> String in
                 if let mealLabel = dishToMealLabel[dish] {
                     return "\(dish)（\(mealLabel)）"
@@ -94,31 +99,70 @@ enum ShoppingAutoFillService {
                 return dish
             }.joined(separator: "、")
 
-            print(
-                "[ShoppingFill][fillShoppingList] ➕ 追加: \(item.name) [\(item.category)] \(item.combinedAmount) source=\(sourceLabel)"
+            // バリデーション済み分量 (combinedAmount or ingredientAmount)
+            let validAmount: String = {
+                let s = item.combinedAmount.trimmingCharacters(in: .whitespaces)
+                return (!s.isEmpty && s.count <= 20) ? s : ""
+            }()
+
+            candidates.append(
+                ShoppingItemCandidate(
+                    name: item.name,
+                    ingredientAmount: validAmount,
+                    isSelected: true,
+                    sourceMenuName: sourceLabel,
+                    category: category
+                )
             )
-            let newItem = ShoppingItem(
-                name: item.name,
-                category: category,
-                count: 1,
-                isSelected: false,
-                sourceMenuName: sourceLabel.isEmpty ? nil : sourceLabel,
-                recipeAmount: item.combinedAmount.isEmpty ? nil : item.combinedAmount
-            )
-            context.insert(newItem)
-            insertedCount += 1
         }
 
-        print("[ShoppingFill][fillShoppingList] context.save() 前 挿入予定数=\(insertedCount)")
+        print("[ShoppingFill][analyze] 候補数=\(candidates.count)")
+        return candidates
+    }
+
+    /// 候補リストを実際に買い物リストへ保存する
+    static func addSelectedItems(
+        _ candidates: [ShoppingItemCandidate],
+        context: ModelContext
+    ) throws -> Int {
+        var count = 0
+        for candidate in candidates where candidate.isSelected {
+            let newItem = ShoppingItem(
+                name: candidate.name,
+                category: candidate.category,
+                count: 1,
+                isSelected: false,
+                sourceMenuName: candidate.sourceMenuName.isEmpty ? nil : candidate.sourceMenuName,
+                recipeAmount: candidate.ingredientAmount.isEmpty ? nil : candidate.ingredientAmount
+            )
+            context.insert(newItem)
+            count += 1
+        }
         try context.save()
-        print("[ShoppingFill][fillShoppingList] ✅ 保存完了")
-        return insertedCount
+        return count
+    }
+
+    /// レシピから不足食材を解析して買い物リストに追加する（従来互換）
+    static func fillShoppingList(
+        recipes: [String: RecipeDetail],
+        mealPlans: [MealPlan],
+        stockItems: [StockItem],
+        existingShoppingItems: [ShoppingItem],
+        context: ModelContext
+    ) async throws -> Int {
+        let candidates = try await analyzeMissingIngredients(
+            recipes: recipes,
+            mealPlans: mealPlans,
+            stockItems: stockItems,
+            existingShoppingItems: existingShoppingItems,
+            needsMerging: false  // 自動追加時もマージしない
+        )
+        return try addSelectedItems(candidates, context: context)
     }
 
     // MARK: - 既存の自動追加アイテムを削除するユーティリティ
 
     /// 過去の自動追加分（sourceMenuName が設定されているもの）をすべて削除する
-    /// ※ 再生成時に古い自動追加アイテムをクリアしてから再追加するために使用
     static func clearAutoAddedItems(from items: [ShoppingItem], context: ModelContext) {
         for item in items where item.sourceMenuName != nil {
             context.delete(item)

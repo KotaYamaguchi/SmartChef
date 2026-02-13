@@ -8,6 +8,20 @@
 import Foundation
 import SwiftData
 
+// MARK: - レシピ詳細モデル (Codable)
+
+struct Ingredient: Codable {
+    var name: String
+    var amount: String
+}
+
+struct RecipeDetail: Codable {
+    var dishName: String
+    var ingredients: [Ingredient]
+    var steps: [String]
+    var cookingTime: String
+}
+
 // MARK: - スキャン一時モデル（非永続・確認画面用ステージング）
 
 struct ScannedItem: Identifiable {
@@ -49,7 +63,8 @@ final class BarcodeCache {
     private var cache: [String: BarcodeCacheEntry] {
         get {
             guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-                  let decoded = try? JSONDecoder().decode([String: BarcodeCacheEntry].self, from: data)
+                let decoded = try? JSONDecoder().decode(
+                    [String: BarcodeCacheEntry].self, from: data)
             else { return [:] }
             return decoded
         }
@@ -108,9 +123,16 @@ enum MealPlanGenerationMode: String, CaseIterable {
 
 // カテゴリはそのままEnumでOK
 enum Category: String, Codable, CaseIterable {
-    case vegetables = "野菜", meat = "肉類", seafood = "魚介類", dairy = "乳製品"
-    case egg = "卵・日配品", fruits = "果物", seasoning = "調味料", grain = "米・麺類"
-    case drink = "飲料", other = "その他"
+    case vegetables = "野菜"
+    case meat = "肉類"
+    case seafood = "魚介類"
+    case dairy = "乳製品"
+    case egg = "卵・日配品"
+    case fruits = "果物"
+    case seasoning = "調味料"
+    case grain = "米・麺類"
+    case drink = "飲料"
+    case other = "その他"
 }
 
 enum MealType: String, Codable, CaseIterable {
@@ -126,7 +148,7 @@ final class StockItem {
     var category: Category
     var deadline: Date?
     var count: Int
-    
+
     init(name: String, category: Category, deadline: Date? = nil, count: Int = 1) {
         self.id = UUID()
         self.name = name
@@ -185,9 +207,9 @@ final class MealHistory {
 // MARK: - 食事計画ステータス
 
 enum MealPlanStatus: String, Codable, CaseIterable {
-    case planned   = "予定"
+    case planned = "予定"
     case completed = "完了"
-    case changed   = "変更済"
+    case changed = "変更済"
 }
 
 // MARK: - 食事計画モデル
@@ -206,5 +228,53 @@ final class MealPlan {
         self.mealType = mealType
         self.menuName = menuName
         self.status = status
+    }
+
+    @Relationship(deleteRule: .cascade) var recipes: [PersistentRecipe]? = []
+}
+
+// MARK: - 永続化レシピモデル
+
+@Model
+final class PersistentRecipe {
+    var id: UUID
+    var dishName: String
+    var steps: [String]
+    var cookingTime: String
+
+    @Relationship(deleteRule: .cascade) var ingredients: [PersistentIngredient]
+
+    init(
+        dishName: String, steps: [String], cookingTime: String,
+        ingredients: [PersistentIngredient] = []
+    ) {
+        self.id = UUID()
+        self.dishName = dishName
+        self.steps = steps
+        self.cookingTime = cookingTime
+        self.ingredients = ingredients
+    }
+
+    /// RecipeDetail (Codable struct) へ変換（既存ロジックとの互換性のため）
+    var toDetail: RecipeDetail {
+        RecipeDetail(
+            dishName: dishName,
+            ingredients: ingredients.map { Ingredient(name: $0.name, amount: $0.amount) },
+            steps: steps,
+            cookingTime: cookingTime
+        )
+    }
+}
+
+@Model
+final class PersistentIngredient {
+    var id: UUID
+    var name: String
+    var amount: String
+
+    init(name: String, amount: String) {
+        self.id = UUID()
+        self.name = name
+        self.amount = amount
     }
 }

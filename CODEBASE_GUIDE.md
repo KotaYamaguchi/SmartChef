@@ -267,22 +267,26 @@ Apple Intelligence（Foundation Models）を使用して栄養分析・献立生
 
 ### `DashBordView.swift`
 
-アプリの中心となるダッシュボード画面。`NavigationStack` + `List` 構成で 4 つのセクションを持つ。
+アプリの中心となるダッシュボード画面。`NavigationStack` + `List` 構成で 3 つのセクションを持つ。
 
 **セクション構成:**
 
 | セクション | 変数名 | 内容 |
 |---|---|---|
-| 今日の献立 | `dailyMealPlanSection` | 当日の食事計画を朝・昼・晩の順に表示 |
+| 今日の献立 | `dailyMealPlanSection` | 当日の食事計画を朝・昼・晩の順に表示。レシピ生成中はセクション先頭にプログレス表示 |
 | 今日使うべき食材 | `expirySection` | `AppSettings.shared.expiryWarningDays` 日以内に期限が切れる食材を警告表示 |
 | 最近の食事 | `recentMealsSection` | 食事履歴の直近 5 件を表示 |
+
+**アプリ内通知:**
+
+`generatingDishes` が非空→空に遷移した際に、画面上部に緑色のトースト通知バナー（`recipeReadyBanner`）を 3 秒間表示する。
 
 **ファイル内で定義されているビューコンポーネント:**
 
 | 構造体名 | 役割 |
 |---|---|
 | `DashBordView` | メインダッシュボード |
-| `MealPlanCard` | 食事計画 1 件のカード表示 |
+| `MealPlanCard` | 食事計画 1 件のカード表示（レシピ生成中/完了のインジケーター付き） |
 | `MealPlanStatusBadge` | 予定/完了/変更済 のカプセル型バッジ |
 | `MealPlanDetailView` | 食事計画の詳細・操作画面（NavigationLink 遷移先） |
 | `StockUpdateSheet` | 完了報告時の在庫連動シート |
@@ -504,6 +508,8 @@ AI による栄養分析画面。
 - 献立生成後、各料理のレシピを並行プリフェッチ
 - レシピ完了後、不足食材を AI マージして買い物リストに自動追加
 - 生成完了時にローカル通知を送信（フォアグラウンド・バックグラウンド両対応）
+- アプリ内通知: レシピ生成完了時に緑色のトーストバナーを画面上部に 3 秒間表示
+- ダッシュボードの献立カード（`MealPlanCard`）にレシピ生成中/完了のインジケーターを表示
 
 ---
 

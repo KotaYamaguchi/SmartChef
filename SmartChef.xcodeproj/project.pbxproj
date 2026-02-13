@@ -17,7 +17,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		8A51C1982F3E23420025E3AA /* SmartChef.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = SmartChef.xctestplan; sourceTree = "<group>"; };
+		8A51C1982F3E23420025E3AA /* SmartChef.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = SmartChef.xctestplan; sourceTree = "<group>"; };
 		8A87AF8B2F34CB3600FDA010 /* SmartChef.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartChef.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA000001000000000000001B /* SmartChefTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartChefTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */

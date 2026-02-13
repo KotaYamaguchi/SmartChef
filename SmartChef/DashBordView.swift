@@ -34,6 +34,10 @@ struct DashBordView: View {
     @State private var pendingShoppingDishes: Set<String> = []
     /// 買い物リスト自動補充の進行状態
     @State private var isFillingShoppingList = false
+    /// レシピ生成完了バナーの表示フラグ
+    @State private var showRecipeReadyBanner = false
+    /// 前回の generatingDishes が空でなかったかどうか（非空→空の遷移を検知するため）
+    @State private var wasGeneratingRecipes = false
 
     var body: some View {
         NavigationStack {
@@ -49,23 +53,50 @@ struct DashBordView: View {
             }
             .navigationTitle("ダッシュボード")
         }
+        .overlay(alignment: .top) {
+            if showRecipeReadyBanner {
+                recipeReadyBanner
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .onChange(of: IntelligenceService.shared.generatingDishes) { _, generating in
             let intelligence = IntelligenceService.shared
             print(
                 "[ShoppingFill][onChange] generatingDishes=\(generating) | pending=\(pendingShoppingDishes) | isFilling=\(isFillingShoppingList)"
             )
 
+            // レシピ生成完了バナー表示: 非空→空の遷移を検知
+            if wasGeneratingRecipes && generating.isEmpty {
+                withAnimation(.spring(duration: 0.4)) {
+                    showRecipeReadyBanner = true
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(3.0))
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showRecipeReadyBanner = false
+                    }
+                }
+            }
+            wasGeneratingRecipes = !generating.isEmpty
+
             guard !pendingShoppingDishes.isEmpty, !isFillingShoppingList else {
                 print("[ShoppingFill][onChange] → スキップ（pending空 or 補充中）")
                 return
             }
 
-            // まだ生成中の皿がなく、かつ全皿が「キャッシュ済み or エラー済み」になったら発火
+            // まだ生成中の皿がなく、かつ全皿が「永続化済み or エラー済み」になったら発火
+            let mode = settings.generationMode
+            let relevantPlans = mode == .morning ? todayMealPlans() : eveningBatchPlans()
+            // 全レシピを収集
+            let allRecipies = relevantPlans.flatMap { $0.recipes ?? [] }
+
             let allSettled = pendingShoppingDishes.allSatisfy { dish in
-                let cached = intelligence.cachedRecipes[dish] != nil
+                let persisted = allRecipies.contains { $0.dishName == dish }
                 let errored = intelligence.recipeErrors[dish] != nil
-                print("[ShoppingFill][onChange]   dish=\(dish) cached=\(cached) errored=\(errored)")
-                return cached || errored
+                print(
+                    "[ShoppingFill][onChange]   dish=\(dish) persisted=\(persisted) errored=\(errored)"
+                )
+                return persisted || errored
             }
 
             print("[ShoppingFill][onChange] allSettled=\(allSettled)")
@@ -151,6 +182,18 @@ struct DashBordView: View {
                 }
                 .buttonStyle(.plain)
             } else {
+                // レシピ生成中の全体インジケーター
+                if !IntelligenceService.shared.generatingDishes.isEmpty {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        let generatingCount = IntelligenceService.shared.generatingDishes.count
+                        Text("\(generatingCount)品のレシピを生成中...")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.vertical, 4)
+                }
                 ForEach(plans) { plan in
                     NavigationLink(destination: MealPlanDetailView(plan: plan)) {
                         MealPlanCard(plan: plan)
@@ -330,7 +373,7 @@ struct DashBordView: View {
                     for plan in newPlans { modelContext.insert(plan) }
                     try? modelContext.save()
                     generatedPlanReason = s.reason
-                    prefetchDishes(from: s)
+                    prefetchDishes(from: newPlans)
 
                 // MARK: 夕5時モード: 今夜の夕食 + 明日の朝食・昼食
                 case .evening:
@@ -347,7 +390,7 @@ struct DashBordView: View {
                     for plan in newPlans { modelContext.insert(plan) }
                     try? modelContext.save()
                     generatedPlanReason = s.reason
-                    prefetchDishes(from: s)
+                    prefetchDishes(from: newPlans)
                 }
             } catch {
                 mealPlanError = error.localizedDescription
@@ -356,12 +399,14 @@ struct DashBordView: View {
         }
     }
 
-    /// 献立の各品目レシピをプリフェッチし、完了後の買い物リスト更新に備える
-    private func prefetchDishes(from suggestion: DailyMealPlan) {
-        let allDishes = [suggestion.breakfast, suggestion.lunch, suggestion.dinner]
-            .flatMap { $0.components(separatedBy: "・") }
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+    /// 献立の各品目レシピを生成・永続化し、完了後の買い物リスト更新に備える
+    private func prefetchDishes(from plans: [MealPlan]) {
+        let allDishes = plans.flatMap { plan in
+            plan.menuName
+                .components(separatedBy: "・")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }
         print("[ShoppingFill][prefetchDishes] dishes=\(allDishes)")
         // 古い自動追加アイテムをクリアしてバッチを登録
         let cleared = shoppingItems.filter { $0.sourceMenuName != nil }
@@ -371,22 +416,53 @@ struct DashBordView: View {
         pendingShoppingDishes = Set(allDishes)
         print(
             "[ShoppingFill][prefetchDishes] pendingShoppingDishes セット完了: \(pendingShoppingDishes)")
-        IntelligenceService.shared.prefetchRecipes(for: allDishes)
+
+        // 各プランの各料理についてレシピ生成を開始
+        for plan in plans {
+            let dishes = plan.menuName
+                .components(separatedBy: "・")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            for dish in dishes {
+                Task {
+                    await IntelligenceService.shared.generateAndPersistRecipe(
+                        for: dish, plan: plan, context: modelContext)
+                }
+            }
+        }
     }
 
     /// レシピ生成完了後に不足食材を買い物リストへ自動追加する
     private func autoFillShoppingList(for dishes: Set<String>) async {
         print("[ShoppingFill][autoFill] 開始 dishes=\(dishes)")
+
+        // 設定を確認: 自動追加がオフならスキップ
+        guard settings.autoFillShoppingList else {
+            print("[ShoppingFill][autoFill] ⚠️ 自動追加設定がOFFのためスキップ")
+            // 通知だけは送る（レシピ生成完了として）
+            NotificationService.sendMealPlanReadyNotification(
+                dishCount: dishes.count,
+                shoppingItemCount: 0
+            )
+            return
+        }
+
         isFillingShoppingList = true
         defer { isFillingShoppingList = false }
 
-        let intelligence = IntelligenceService.shared
+        let mode = settings.generationMode
+        let plans = mode == .morning ? todayMealPlans() : eveningBatchPlans()
+        print("[ShoppingFill][autoFill] 対象MealPlan数=\(plans.count) mode=\(mode.rawValue)")
+
+        // 永続化されたレシピから辞書を作成
+        let allRecipes = plans.flatMap { $0.recipes ?? [] }
         let recipes = dishes.compactMap { dish -> (String, RecipeDetail)? in
-            guard let recipe = intelligence.cachedRecipes[dish] else {
+            guard let recipe = allRecipes.first(where: { $0.dishName == dish }) else {
                 print("[ShoppingFill][autoFill] ⚠️ レシピなし（エラーまたは未生成）: \(dish)")
                 return nil
             }
-            return (dish, recipe)
+            return (dish, recipe.toDetail)
         }
         let recipesDict = Dictionary(uniqueKeysWithValues: recipes)
         print(
@@ -396,10 +472,6 @@ struct DashBordView: View {
             print("[ShoppingFill][autoFill] ⚠️ 有効レシピ0件のため終了")
             return
         }
-
-        let mode = settings.generationMode
-        let plans = mode == .morning ? todayMealPlans() : eveningBatchPlans()
-        print("[ShoppingFill][autoFill] 対象MealPlan数=\(plans.count) mode=\(mode.rawValue)")
 
         do {
             let addedCount = try await ShoppingAutoFillService.fillShoppingList(
@@ -420,12 +492,65 @@ struct DashBordView: View {
             print("[ShoppingFill][autoFill] ❌ 失敗: \(error)")
         }
     }
+
+    // MARK: - レシピ生成完了バナー
+
+    private var recipeReadyBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("レシピの生成が完了しました")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            Spacer()
+            Image(systemName: "xmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.6))
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showRecipeReadyBanner = false
+                    }
+                }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.green.gradient)
+                .shadow(color: .green.opacity(0.3), radius: 8, y: 4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
 }
 
 // MARK: - 食事計画カード
 
 struct MealPlanCard: View {
     let plan: MealPlan
+
+    /// 献立名を「・」で分割した料理リスト
+    private var dishes: [String] {
+        plan.menuName
+            .components(separatedBy: "・")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// この献立に含まれるいずれかの料理がレシピ生成中か
+    private var isAnyDishGenerating: Bool {
+        dishes.contains { IntelligenceService.shared.generatingDishes.contains($0) }
+    }
+
+    /// この献立のすべての料理のレシピが生成済みか
+    private var allDishesHaveRecipe: Bool {
+        dishes.allSatisfy { dish in
+            plan.recipes?.contains { $0.dishName == dish } ?? false
+        }
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -447,6 +572,25 @@ struct MealPlanCard: View {
                     .font(.subheadline)
                     .bold()
                     .lineLimit(2)
+                // レシピ生成状態インジケーター
+                if isAnyDishGenerating {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text("レシピ生成中")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                } else if allDishesHaveRecipe {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                        Text("レシピ準備完了")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
             }
 
             Spacer()
@@ -516,6 +660,7 @@ struct MealPlanDetailView: View {
     @State private var showMenuEditSheet = false  // 献立変更シート（編集・内容変更を統合）
     @State private var editingMenuName = ""
     @State private var showDeleteConfirm = false
+    @State private var showIngredientSheet = false  // 手動食材追加シート
 
     /// 献立名を「・」で分割した料理リスト
     private var dishes: [String] {
@@ -562,10 +707,15 @@ struct MealPlanDetailView: View {
             ForEach(dishes, id: \.self) { dish in
                 DishRecipeSection(
                     dishName: dish,
-                    recipe: IntelligenceService.shared.cachedRecipes[dish],
+                    recipe: plan.recipes?.first(where: { $0.dishName == dish })?.toDetail,
                     isGenerating: IntelligenceService.shared.generatingDishes.contains(dish),
                     error: IntelligenceService.shared.recipeErrors[dish],
-                    onGenerate: { IntelligenceService.shared.prefetchRecipes(for: [dish]) }
+                    onGenerate: {
+                        Task {
+                            await IntelligenceService.shared.generateAndPersistRecipe(
+                                for: dish, plan: plan, context: modelContext)
+                        }
+                    }
                 )
             }
 
@@ -589,6 +739,14 @@ struct MealPlanDetailView: View {
                         .foregroundColor(plan.status == .completed ? .secondary : .orange)
                 }
                 .disabled(plan.status == .completed)
+
+                // 買い物リストへ追加（手動）
+                Button {
+                    showIngredientSheet = true
+                } label: {
+                    Label("買い物リストへ追加", systemImage: "cart.badge.plus")
+                        .foregroundColor(.blue)
+                }
             } header: {
                 Text("報告")
             } footer: {
@@ -608,13 +766,19 @@ struct MealPlanDetailView: View {
         .navigationTitle(plan.mealType.rawValue)
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            // 未キャッシュ・未生成の品目のレシピ生成を開始（プリフェッチ済みはスキップ）
+            // 未生成の品目のレシピ生成を開始（永続化済みはスキップ）
             let intelligence = IntelligenceService.shared
-            let pending = dishes.filter {
-                intelligence.cachedRecipes[$0] == nil && !intelligence.generatingDishes.contains($0)
+            let pending = dishes.filter { dish in
+                let hasRecipe = plan.recipes?.contains { $0.dishName == dish } ?? false
+                return !hasRecipe && !intelligence.generatingDishes.contains(dish)
             }
             if !pending.isEmpty {
-                intelligence.prefetchRecipes(for: pending)
+                for dish in pending {
+                    Task {
+                        await intelligence.generateAndPersistRecipe(
+                            for: dish, plan: plan, context: modelContext)
+                    }
+                }
             }
         }
         // 完了報告 → 在庫連動シート
@@ -632,6 +796,10 @@ struct MealPlanDetailView: View {
                 editMenuName(to: editingMenuName)
             }
             .presentationDetents([.medium])
+        }
+        // 手動食材追加シート
+        .sheet(isPresented: $showIngredientSheet) {
+            IngredientSelectionSheet(mealPlans: [plan])
         }
         // 削除確認ダイアログ
         .confirmationDialog(
@@ -664,13 +832,19 @@ struct MealPlanDetailView: View {
         }
         try? modelContext.save()
 
-        // 変更後の献立名に含まれる品目のレシピをプリフェッチ
+        // 変更後の献立名に含まれる品目のレシピを生成・永続化
         let newDishes =
             trimmed
             .components(separatedBy: "・")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        IntelligenceService.shared.prefetchRecipes(for: newDishes)
+
+        for dish in newDishes {
+            Task {
+                await IntelligenceService.shared.generateAndPersistRecipe(
+                    for: dish, plan: plan, context: modelContext)
+            }
+        }
     }
 
     /// 食事計画を削除

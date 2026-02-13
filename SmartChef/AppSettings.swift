@@ -46,7 +46,17 @@ final class AppSettings {
 
     /// レシートスキャン保存時、買い物リストの照合アイテムを自動削除するか（デフォルト: true）
     var autoDeleteMatchedShoppingItems: Bool {
-        didSet { UserDefaults.standard.set(autoDeleteMatchedShoppingItems, forKey: Keys.autoDeleteMatchedShoppingItems) }
+        didSet {
+            UserDefaults.standard.set(
+                autoDeleteMatchedShoppingItems, forKey: Keys.autoDeleteMatchedShoppingItems)
+        }
+    }
+
+    /// 献立・レシピ生成時に不足食材を買い物リストへ自動追加するか（デフォルト: true）
+    var autoFillShoppingList: Bool {
+        didSet {
+            UserDefaults.standard.set(autoFillShoppingList, forKey: Keys.autoFillShoppingList)
+        }
     }
 
     // MARK: - 初期化
@@ -54,9 +64,10 @@ final class AppSettings {
     private init() {
         let ud = UserDefaults.standard
 
-        generationMode = MealPlanGenerationMode(
-            rawValue: ud.string(forKey: Keys.generationMode) ?? ""
-        ) ?? .morning
+        generationMode =
+            MealPlanGenerationMode(
+                rawValue: ud.string(forKey: Keys.generationMode) ?? ""
+            ) ?? .morning
 
         servingsCount = {
             let v = ud.integer(forKey: Keys.servingsCount)
@@ -70,16 +81,20 @@ final class AppSettings {
 
         showExpiredItems = ud.object(forKey: Keys.showExpiredItems) as? Bool ?? true
 
-        autoDeleteMatchedShoppingItems = ud.object(forKey: Keys.autoDeleteMatchedShoppingItems) as? Bool ?? true
+        autoDeleteMatchedShoppingItems =
+            ud.object(forKey: Keys.autoDeleteMatchedShoppingItems) as? Bool ?? true
+
+        autoFillShoppingList = ud.object(forKey: Keys.autoFillShoppingList) as? Bool ?? true
     }
 
     // MARK: - UserDefaults キー
 
     private enum Keys {
-        static let generationMode                 = "generationMode"
-        static let servingsCount                  = "servingsCount"
-        static let expiryWarningDays              = "expiryWarningDays"
-        static let showExpiredItems               = "showExpiredItems"
+        static let generationMode = "generationMode"
+        static let servingsCount = "servingsCount"
+        static let expiryWarningDays = "expiryWarningDays"
+        static let showExpiredItems = "showExpiredItems"
         static let autoDeleteMatchedShoppingItems = "autoDeleteMatchedShoppingItems"
+        static let autoFillShoppingList = "autoFillShoppingList"
     }
 }

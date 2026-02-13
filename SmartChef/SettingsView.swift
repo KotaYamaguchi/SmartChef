@@ -5,8 +5,8 @@
 //  Created by Kota Yamaguchi on 2026/02/12.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct SettingsView: View {
     private let settings = AppSettings.shared
@@ -20,10 +20,12 @@ struct SettingsView: View {
             Form {
                 // MARK: - 食事設定
                 Section {
-                    Stepper(value: Binding(
-                        get: { settings.servingsCount },
-                        set: { settings.servingsCount = $0 }
-                    ), in: 1...8) {
+                    Stepper(
+                        value: Binding(
+                            get: { settings.servingsCount },
+                            set: { settings.servingsCount = $0 }
+                        ), in: 1...8
+                    ) {
                         HStack {
                             Label("何人前", systemImage: "person.2")
                             Spacer()
@@ -43,10 +45,13 @@ struct SettingsView: View {
                     HStack {
                         Label("期限警告の日数", systemImage: "bell.badge")
                         Spacer()
-                        Picker("", selection: Binding(
-                            get: { settings.expiryWarningDays },
-                            set: { settings.expiryWarningDays = $0 }
-                        )) {
+                        Picker(
+                            "",
+                            selection: Binding(
+                                get: { settings.expiryWarningDays },
+                                set: { settings.expiryWarningDays = $0 }
+                            )
+                        ) {
                             ForEach([3, 5, 7, 10, 14], id: \.self) { days in
                                 Text("\(days)日前").tag(days)
                             }
@@ -55,30 +60,52 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                     }
 
-                    Toggle(isOn: Binding(
-                        get: { settings.showExpiredItems },
-                        set: { settings.showExpiredItems = $0 }
-                    )) {
+                    Toggle(
+                        isOn: Binding(
+                            get: { settings.showExpiredItems },
+                            set: { settings.showExpiredItems = $0 }
+                        )
+                    ) {
                         Label("期限切れアイテムを表示", systemImage: "calendar.badge.exclamationmark")
                     }
                 } header: {
                     Label("在庫管理", systemImage: "refrigerator")
                 } footer: {
-                    Text("ダッシュボードの「今日使うべき食材」は期限警告日数以内の食材を表示します。期限切れアイテムを非表示にすると、在庫一覧から期限切れのものが除外されます。")
+                    Text(
+                        "ダッシュボードの「今日使うべき食材」は期限警告日数以内の食材を表示します。期限切れアイテムを非表示にすると、在庫一覧から期限切れのものが除外されます。"
+                    )
                 }
 
                 // MARK: - スキャン設定
                 Section {
-                    Toggle(isOn: Binding(
-                        get: { settings.autoDeleteMatchedShoppingItems },
-                        set: { settings.autoDeleteMatchedShoppingItems = $0 }
-                    )) {
+                    Toggle(
+                        isOn: Binding(
+                            get: { settings.autoDeleteMatchedShoppingItems },
+                            set: { settings.autoDeleteMatchedShoppingItems = $0 }
+                        )
+                    ) {
                         Label("買い物リストを自動照合", systemImage: "cart.badge.checkmark")
                     }
                 } header: {
                     Label("スキャン設定", systemImage: "barcode.viewfinder")
                 } footer: {
                     Text("有効にすると、レシートスキャン時に買い物リストと照合し、購入済みアイテムを自動で削除します。")
+                }
+
+                // MARK: - 買い物リスト設定
+                Section {
+                    Toggle(
+                        isOn: Binding(
+                            get: { settings.autoFillShoppingList },
+                            set: { settings.autoFillShoppingList = $0 }
+                        )
+                    ) {
+                        Label("買い物リストへ自動追加", systemImage: "cart.badge.plus")
+                    }
+                } header: {
+                    Label("買い物リスト", systemImage: "cart")
+                } footer: {
+                    Text("有効にすると、レシピ生成時に不足している食材を自動的に買い物リストへ追加します。")
                 }
 
                 // MARK: - 献立自動生成
@@ -138,14 +165,19 @@ struct SettingsView: View {
                 } header: {
                     Label("データ管理", systemImage: "externaldrive")
                 } footer: {
-                    Text("バーコードキャッシュをリセットすると、登録済みの商品名が削除されます。「すべてのデータを削除」は在庫・献立・食事履歴・買い物リストを削除します。いずれも取り消せません。")
+                    Text(
+                        "バーコードキャッシュをリセットすると、登録済みの商品名が削除されます。「すべてのデータを削除」は在庫・献立・食事履歴・買い物リストを削除します。いずれも取り消せません。"
+                    )
                 }
 
                 // MARK: - このアプリについて
                 Section {
                     LabeledContent("バージョン") {
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-")
-                            .foregroundStyle(.secondary)
+                        Text(
+                            Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+                                ?? "-"
+                        )
+                        .foregroundStyle(.secondary)
                     }
                     LabeledContent("ビルド") {
                         Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-")
@@ -315,6 +347,7 @@ private struct ModeSelectionRow: View {
 
 #Preview {
     SettingsView()
-        .modelContainer(for: [StockItem.self, MealPlan.self, MealHistory.self, ShoppingItem.self],
-                        inMemory: true)
+        .modelContainer(
+            for: [StockItem.self, MealPlan.self, MealHistory.self, ShoppingItem.self],
+            inMemory: true)
 }

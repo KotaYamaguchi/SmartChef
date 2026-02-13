@@ -93,7 +93,6 @@ enum MealPlanScheduler {
                     ]
                     for plan in newPlans { context.insert(plan) }
                     try context.save()
-                    prefetchDishes(from: suggestion)
 
                 // MARK: 夕5時モード: 今夜の夕食 + 明日の朝食・昼食
                 case .evening:
@@ -127,7 +126,8 @@ enum MealPlanScheduler {
                     ]
                     for plan in newPlans { context.insert(plan) }
                     try context.save()
-                    prefetchDishes(from: suggestion)
+                    await prefetchDishes(from: suggestion, context: context, plans: newPlans)
+
                 }
 
                 // バックグラウンドで献立生成が完了したことを通知
@@ -165,13 +165,53 @@ enum MealPlanScheduler {
         return (stockItems, history)
     }
 
-    /// 献立の各品目レシピをプリフェッチする
-    private static func prefetchDishes(from suggestion: DailyMealPlan) {
+    /// 献立の各品目レシピを生成して永続化する
+    private static func prefetchDishes(
+        from suggestion: DailyMealPlan, context: ModelContext, plans: [MealPlan]
+    ) async {
         let allDishes = [suggestion.breakfast, suggestion.lunch, suggestion.dinner]
             .flatMap { $0.components(separatedBy: "・") }
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        IntelligenceService.shared.prefetchRecipes(for: allDishes)
+
+        for dish in set(allDishes) {  // 重複除外
+            do {
+                // バックグラウンドでレシピ生成
+                let detail = try await IntelligenceService.shared.generateRecipe(for: dish)
+
+                // 関連するMealPlanを探す
+                // NOTE: dish名が含まれる全てのプランに追加する
+                let targetPlans = plans.filter { plan in
+                    plan.menuName.contains(dish)
+                }
+
+                for plan in targetPlans {
+                    // 既に登録済みかチェック
+                    let exists = plan.recipes?.contains { $0.dishName == dish } ?? false
+                    if !exists {
+                        let ingredients = detail.ingredients.map {
+                            PersistentIngredient(name: $0.name, amount: $0.amount)
+                        }
+                        let recipe = PersistentRecipe(
+                            dishName: detail.dishName,
+                            steps: detail.steps,
+                            cookingTime: detail.cookingTime,
+                            ingredients: ingredients
+                        )
+                        plan.recipes?.append(recipe)
+                    }
+                }
+                print("[MealPlanScheduler] レシピ生成・保存完了: \(dish)")
+            } catch {
+                print("[MealPlanScheduler] レシピ生成失敗: \(dish) error=\(error)")
+            }
+        }
+
+        try? context.save()
+    }
+
+    private static func set(_ values: [String]) -> [String] {
+        Array(Set(values))
     }
 
     /// 現在のモードに合わせた次回スケジュール時刻を計算する

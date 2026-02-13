@@ -898,3 +898,77 @@ SmartChefTests/
 ```
 
 
+## Task N+4: アプリ内レシピ生成完了通知 + ダッシュボードのレシピ生成状態表示
+
+### 実装日: 2026-02-13
+
+### 概要
+
+アプリを使用中にレシピ生成が完了したことをユーザーに知らせるアプリ内トースト通知と、ダッシュボードの各献立カードにレシピ生成の進捗状態を表示する機能を追加。
+
+---
+
+### N+4-1. `DashBordView.swift` — トースト通知バナー
+
+**新規 State プロパティ:**
+
+| プロパティ | 型 | 目的 |
+|---|---|---|
+| `showRecipeReadyBanner` | `Bool` | バナー表示のトリガー |
+| `wasGeneratingRecipes` | `Bool` | 前回の `generatingDishes` が空でなかったかを追跡（非空→空遷移の検知用） |
+
+**遷移検知ロジック（`onChange(of: generatingDishes)` 内）:**
+
+1. `wasGeneratingRecipes == true && generating.isEmpty` の条件でバナー表示を開始
+2. `withAnimation(.spring(duration: 0.4))` でスプリングアニメーション付きで表示
+3. `Task.sleep(for: .seconds(3.0))` 後に `withAnimation(.easeOut(duration: 0.3))` でフェードアウト
+4. 毎回 `wasGeneratingRecipes = !generating.isEmpty` で状態を更新
+
+**バナー UI (`recipeReadyBanner`):**
+
+- `.overlay(alignment: .top)` で画面上部に重ねて表示
+- `.transition(.move(edge: .top).combined(with: .opacity))` でスライドイン + フェードインアニメーション
+- 緑のグラデーション背景（`.green.gradient`）+ 角丸14 + ドロップシャドウ
+- `xmark.circle.fill` ボタンで手動非表示可能
+
+---
+
+### N+4-2. `DashBordView.swift` — dailyMealPlanSection のレシピ生成中インジケーター
+
+献立が存在する場合（`plans` が非空）に、`generatingDishes` が空でなければセクションの先頭行（`ForEach(plans)` の前）に表示:
+
+```swift
+if !IntelligenceService.shared.generatingDishes.isEmpty {
+    HStack(spacing: 10) {
+        ProgressView()
+            .controlSize(.small)
+        let generatingCount = IntelligenceService.shared.generatingDishes.count
+        Text("\(generatingCount)品のレシピを生成中...")
+            .font(.caption)
+            .foregroundColor(.orange)
+    }
+    .padding(.vertical, 4)
+}
+```
+
+---
+
+### N+4-3. `MealPlanCard` — 個別カードのレシピ生成状態インジケーター
+
+**追加 computed property:**
+
+| プロパティ | 型 | ロジック |
+|---|---|---|
+| `dishes` | `[String]` | `plan.menuName` を「・」で分割したリスト |
+| `isAnyDishGenerating` | `Bool` | `dishes` のいずれかが `generatingDishes` に含まれるか |
+| `allDishesHaveRecipe` | `Bool` | `dishes` のすべてが `cachedRecipes` に存在するか |
+
+**表示ルール:**
+
+| 条件 | 表示 |
+|---|---|
+| `isAnyDishGenerating == true` | `ProgressView(.mini)` + 「レシピ生成中」（`.caption2`, `.orange`） |
+| `allDishesHaveRecipe == true` | `checkmark.circle.fill` + 「レシピ準備完了」（`.caption2`, `.green`） |
+| どちらでもない | 表示なし |
+
+カードの献立名（`plan.menuName`）の直下に `HStack` で表示される。`@Observable` の `IntelligenceService.shared` を参照しているため、レシピ生成の完了とともにリアルタイムに状態が更新される。

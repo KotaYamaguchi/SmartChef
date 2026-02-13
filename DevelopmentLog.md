@@ -548,3 +548,125 @@ NotificationService.sendMealPlanReadyNotification(
 | `ShoppingItemTests.swift` | 新規 | ShoppingItem・ShoppingAutoFillService テスト |
 | `StockItemSwiftDataTests.swift` | 新規 | StockItem・MealHistory SwiftData テスト |
 | `IntegrationTests.swift` | 新規 | アプリ統合テスト |
+
+---
+
+## Session 9: バグ修正 — 買い物リストの分量欄にレシピ本文が表示される
+
+### 背景
+
+買い物リスト画面の各行右端に表示される分量（`recipeAmount`）に、「500g」などの正常な分量ではなくレシピ本文や説明文がそのまま表示されるケースがあった。
+
+### 原因
+
+`IntelligenceService.mergeShoppingIngredients()` が返す `combinedAmount` フィールドに、AI が分量ではなくレシピの説明文等を返すことがある。`ShoppingAutoFillService` はこの値を無検証で `recipeAmount` に保存していたため、UI にそのまま表示されていた。
+
+### 修正内容
+
+**`ShoppingAutoFillService.swift` — 保存時の入力バリデーション追加:**
+
+正常な分量（"500g"、"大さじ2 + 小さじ1" 等）は20文字以内に収まる。これを超える場合はレシピ本文等の誤った値とみなして `nil` に落とし、表示を `count + 個` フォールバックに戻す。
+
+```swift
+let validAmount: String? = {
+    let s = item.combinedAmount.trimmingCharacters(in: .whitespaces)
+    return (!s.isEmpty && s.count <= 20) ? s : nil
+}()
+```
+
+**`ShoppingListView.swift` — 表示側の安全策 `.lineLimit(1)` 追加:**
+
+バリデーションをすり抜けた長い文字列がレイアウトを崩さないよう、分量テキストに `.lineLimit(1)` を追加。
+
+---
+
+## Session 10: アプリ内レシピ生成完了通知 + ダッシュボードのレシピ生成状態表示
+
+### 背景
+
+Session 7 で実装したローカル通知はバックグラウンド・フォアグラウンド両対応だが、アプリを開いている最中にレシピ生成が完了したことをユーザーが気付けるアプリ内のビジュアル通知がなかった。また、ダッシュボードの献立セクションにはレシピの生成進捗が表示されておらず、レシピが生成中なのか完了済みなのかが分からなかった。
+
+### ユーザーリクエスト
+
+> 「AIによる献立のレシピ生成が終了したらアプリ内で通知してください．通知の方法は問いません．また，レシピが生成中の場合はダッシュボードの献立のセクションにそれを明記してください．」
+
+### 10-1. DashBordView.swift — アプリ内トースト通知バナーの追加
+
+**新規 State プロパティ:**
+
+```swift
+@State private var showRecipeReadyBanner = false
+@State private var wasGeneratingRecipes = false
+```
+
+**`onChange(of: generatingDishes)` 内の遷移検知:**
+
+`wasGeneratingRecipes`（前回 `generatingDishes` が非空だったか）を追跡し、`generatingDishes` が非空→空に遷移したタイミングでバナーを表示:
+
+```swift
+if wasGeneratingRecipes && generating.isEmpty {
+    withAnimation(.spring(duration: 0.4)) {
+        showRecipeReadyBanner = true
+    }
+    Task {
+        try? await Task.sleep(for: .seconds(3.0))
+        withAnimation(.easeOut(duration: 0.3)) {
+            showRecipeReadyBanner = false
+        }
+    }
+}
+wasGeneratingRecipes = !generating.isEmpty
+```
+
+**バナー UI (`recipeReadyBanner`):**
+
+- 緑のグラデーション背景 + 角丸 + ドロップシャドウ
+- `checkmark.circle.fill` アイコン + 「レシピの生成が完了しました」テキスト
+- 右端に `xmark.circle.fill` で手動非表示ボタン
+- 3 秒後に自動フェードアウト
+- `.overlay(alignment: .top)` でダッシュボードの上部に表示
+
+### 10-2. DashBordView.swift — dailyMealPlanSection のセクション内インジケーター
+
+献立が存在する場合（`plans` が非空）に、`IntelligenceService.shared.generatingDishes` が空でなければセクション先頭にレシピ生成中のインジケーターを表示:
+
+```swift
+if !IntelligenceService.shared.generatingDishes.isEmpty {
+    HStack(spacing: 10) {
+        ProgressView()
+            .controlSize(.small)
+        let generatingCount = IntelligenceService.shared.generatingDishes.count
+        Text("\(generatingCount)品のレシピを生成中...")
+            .font(.caption)
+            .foregroundColor(.orange)
+    }
+    .padding(.vertical, 4)
+}
+```
+
+### 10-3. MealPlanCard — 個別カードのレシピ生成状態表示
+
+`MealPlanCard` に以下の computed property を追加:
+
+```swift
+private var dishes: [String]  // 献立名を「・」で分割したリスト
+private var isAnyDishGenerating: Bool  // いずれかの料理が生成中か
+private var allDishesHaveRecipe: Bool  // すべての料理のレシピがキャッシュ済みか
+```
+
+カードの献立名の下に状態を表示:
+
+| 状態 | 表示 |
+|---|---|
+| いずれかの料理が生成中 | `ProgressView(.mini)` + 「レシピ生成中」（オレンジ色） |
+| 全料理のレシピ生成完了 | `checkmark.circle.fill` + 「レシピ準備完了」（緑色） |
+| どちらでもない（未生成かつ未開始） | 表示なし |
+
+### 変更ファイル一覧
+
+| ファイル | 状態 | 主な変更 |
+|---|---|---|
+| `DashBordView.swift` | 変更 | トースト通知バナー、セクション内生成インジケーター、MealPlanCard にレシピ状態表示を追加 |
+| `DevelopmentLog.md` | 更新 | Session 10 を追記 |
+| `CODEBASE_GUIDE.md` | 更新 | MealPlanCard の説明にレシピ生成状態表示を追記 |
+| `IMPLEMENTATION_LOG.md` | 更新 | Task N+4 を追記 |

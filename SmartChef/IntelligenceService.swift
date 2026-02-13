@@ -20,20 +20,6 @@ struct DailyMealPlan: Codable {
     var reason: String
 }
 
-// MARK: - レシピ詳細モデル
-
-struct Ingredient: Codable {
-    var name: String
-    var amount: String
-}
-
-struct RecipeDetail: Codable {
-    var dishName: String
-    var ingredients: [Ingredient]
-    var steps: [String]
-    var cookingTime: String
-}
-
 // MARK: - 栄養分析モデル
 
 struct NutritionAnalysis: Codable {
@@ -59,45 +45,65 @@ final class IntelligenceService {
         return false
     }
 
-    // MARK: - レシピキャッシュ
+    // MARK: - レシピ生成状態管理
 
-    private(set) var cachedRecipes: [String: RecipeDetail] = [:]
+    // NOTE: キャッシュは廃止し、SwiftData (PersistentRecipe) に保存する方針に変更。
+    // UIのローディング表示用に生成中の料理名セットのみ管理する。
     private(set) var generatingDishes: Set<String> = []
     private(set) var recipeErrors: [String: String] = [:]
 
-    /// 複数料理名のレシピを並行してバックグラウンド生成・キャッシュする
-    func prefetchRecipes(for dishes: [String]) {
-        print("[ShoppingFill][prefetchRecipes] 要求dishes=\(dishes)")
-        for dish in dishes {
-            guard cachedRecipes[dish] == nil, !generatingDishes.contains(dish) else {
-                print("[ShoppingFill][prefetchRecipes] スキップ（キャッシュ済み or 生成中）: \(dish)")
-                continue
-            }
-            generatingDishes.insert(dish)
-            recipeErrors.removeValue(forKey: dish)
-            print(
-                "[ShoppingFill][prefetchRecipes] 生成開始: \(dish) | generatingDishes=\(generatingDishes)"
-            )
-            Task {
-                do {
-                    let recipe = try await generateRecipe(for: dish)
-                    cachedRecipes[dish] = recipe
-                    print(
-                        "[ShoppingFill][prefetchRecipes] ✅ 生成完了: \(dish) 食材数=\(recipe.ingredients.count) | generatingDishes残=\(generatingDishes.subtracting([dish]))"
-                    )
-                } catch {
-                    recipeErrors[dish] = error.localizedDescription
-                    print("[ShoppingFill][prefetchRecipes] ❌ 生成失敗: \(dish) error=\(error)")
-                }
-                generatingDishes.remove(dish)
-                print("[ShoppingFill][prefetchRecipes] generatingDishes更新後=\(generatingDishes)")
-            }
-        }
-    }
-
     private init() {}
 
-    // MARK: - レシピ生成
+    // MARK: - レシピ生成と永続化
+
+    /// 指定された料理のレシピを生成し、MealPlan に紐付けて永続化する
+    /// - Parameters:
+    ///   - dish: 料理名
+    ///   - plan: 紐付ける MealPlan
+    ///   - context: SwiftData コンテキスト
+    @MainActor
+    func generateAndPersistRecipe(for dish: String, plan: MealPlan, context: ModelContext) async {
+        guard !generatingDishes.contains(dish) else { return }
+
+        // 既に永続化されているか確認
+        if let existingRecipes = plan.recipes,
+            existingRecipes.contains(where: { $0.dishName == dish })
+        {
+            return
+        }
+
+        generatingDishes.insert(dish)
+        recipeErrors.removeValue(forKey: dish)
+        print("[Intelligence] 生成開始: \(dish)")
+
+        do {
+            // レシピ生成 (generateRecipe は下部で定義)
+            let detail = try await generateRecipe(for: dish)
+
+            // PersistentRecipe に変換して保存
+            let ingredients = detail.ingredients.map {
+                PersistentIngredient(name: $0.name, amount: $0.amount)
+            }
+            let persistentRecipe = PersistentRecipe(
+                dishName: detail.dishName,
+                steps: detail.steps,
+                cookingTime: detail.cookingTime,
+                ingredients: ingredients
+            )
+
+            plan.recipes?.append(persistentRecipe)
+            try context.save()
+
+            print("[Intelligence] ✅ 生成・保存完了: \(dish)")
+        } catch {
+            print("[Intelligence] ❌ 生成失敗: \(dish) error=\(error)")
+            recipeErrors[dish] = error.localizedDescription
+        }
+
+        generatingDishes.remove(dish)
+    }
+
+    // MARK: - レシピ生成 (内部用)
 
     /// 指定された料理の材料・分量・調理手順を生成する
     /// - Parameter dishName: 料理名
@@ -498,6 +504,72 @@ final class IntelligenceService {
             throw IntelligenceError.refusal(explanation)
         } catch {
             print("Ingredient Merge Error: \(error)")
+            throw error
+        }
+    }
+
+    /// 食材リストをマージせずに、カテゴリだけ判定して返す
+    /// - Parameter ingredients: (name, amount, dish) のタプル配列
+    /// - Returns: カテゴリ付与済みの食材リスト（マージなし）
+    func categorizeShoppingIngredients(
+        _ ingredients: [(name: String, amount: String, dish: String)]
+    ) async throws -> [MergedShoppingIngredient] {
+        guard isModelAvailable else { throw IntelligenceError.modelUnavailable }
+        guard !ingredients.isEmpty else { return [] }
+
+        // マージ不要なので、単純に LLM にカテゴリ判定だけさせる
+        // ただし、入力数が多すぎるとトークン溢れのリスクがあるため、適宜分割するか、
+        // 単純なプロンプトで処理する。
+        // ここでは mergeShoppingIngredients と同じフォーマットで返すが、
+        // name は統合せず、combinedAmount は元の amount、sources は [dish] とする。
+
+        let instructions = """
+            あなたは料理の食材管理アシスタントです。
+            食材リストを受け取り、それぞれの適切なカテゴリを判定してください。
+            食材名や分量は変更せず、そのまま出力してください。
+
+            【カテゴリ一覧】
+            野菜, 肉類, 魚介類, 乳製品, 卵・日配品, 果物, 調味料, 米・麺類, 飲料, その他
+
+            必ず指定のJSON形式のみで回答してください。
+            """
+
+        let session = LanguageModelSession(model: model, instructions: instructions)
+
+        let ingredientLines = ingredients.map { "・\($0.name)（\($0.amount)）← \($0.dish)" }.joined(
+            separator: "\n")
+
+        let prompt = """
+            # 食材リスト
+            \(ingredientLines)
+
+            # タスク
+            上記の食材リストの各アイテムについて、適切なカテゴリを判定してください。
+            食材名と分量は元のまま使用してください。
+
+            以下のJSON配列のみで回答してください。
+            [
+              {
+                "name": "食材名（元のまま）",
+                "combinedAmount": "分量（元のまま）",
+                "sources": ["使用料理名（元のまま）"],
+                "category": "カテゴリ名"
+              }
+            ]
+            """
+
+        do {
+            let response = try await session.respond(to: prompt)
+            return try parseJSON(response.content, as: [MergedShoppingIngredient].self)
+        } catch let error as IntelligenceError {
+            throw error
+        } catch LanguageModelSession.GenerationError.guardrailViolation {
+            throw IntelligenceError.guardrailViolation
+        } catch LanguageModelSession.GenerationError.refusal(let refusal, _) {
+            let explanation = await Self.extractRefusalExplanation(refusal)
+            throw IntelligenceError.refusal(explanation)
+        } catch {
+            print("Ingredient Categorization Error: \(error)")
             throw error
         }
     }

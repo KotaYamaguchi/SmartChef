@@ -147,6 +147,7 @@ private struct ShoppingItemRow: View {
                     Text(amount)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 } else {
                     Text("\(item.count)個")
                         .font(.subheadline)

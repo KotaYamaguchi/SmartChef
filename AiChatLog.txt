@@ -1,0 +1,618 @@
+
+ ▐▛███▜▌   Claude Code v2.0.25
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    /Users/kotayamaguchi/Developer/SmartChef
+────────────────────────────────────────────────────────────────────────────────────────────────────── Ctrl+E to show 405 previous messages ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+⏺ Explore(Explore recipe generation flow)
+  ⎿  Prompt:
+       Read the following files in the SmartChef project and return their full contents (or key relevant sections):
+
+       1. /Users/kotayamaguchi/Developer/SmartChef/SmartChef/IntelligenceService.swift - focus on: prefetchRecipes(), generatingDishes, cachedRecipes, recipeErrors properties and the @Observable class declaration
+       2. /Users/kotayamaguchi/Developer/SmartChef/SmartChef/DashBordView.swift - focus on: dailyMealPlanSection (lines around 99-190), MealPlanCard view, and DishRecipeSection usage (around line 539-551)
+
+       Look specifically for:
+       - How generatingDishes: Set<String> and cachedRecipes are published/observed
+       - What DishRecipeSection component looks like and where it's defined (search in RecipeView.swift or DashBordView.swift)
+       - Current state of the dashboard's meal plan section display
+  ⎿  Read(file_path: "/Users/kotayamaguchi/Developer/SmartChef/SmartChef/IntelligenceService.swift")
+
+  ⎿  Read(file_path: "/Users/kotayamaguchi/Developer/SmartChef/SmartChef/DashBordView.swift")
+
+  ⎿  Search(pattern: "**/RecipeView.swift")
+
+  ⎿  Read 679 lines
+
+  ⎿    ⎿  Found 1 file
+          /Users/kotayamaguchi/Developer/SmartChef/SmartChef/RecipeView.swift
+  ⎿  Read 1038 lines
+
+  ⎿  Read(file_path: "/Users/kotayamaguchi/Developer/SmartChef/SmartChef/RecipeView.swift")
+
+  ⎿  Read 218 lines
+
+  ⎿  Response:
+       Perfect! Now I have all the information you requested. Let me provide a comprehensive summary:
+
+       Summary of Key Findings
+
+       1. IntelligenceService.swift - Observable Class & Properties
+
+       Class Declaration (Line 48):
+       @Observable
+       final class IntelligenceService {
+           static let shared = IntelligenceService()
+
+       The @Observable macro enables automatic state tracking. All property changes automatically notify observers.
+
+       Key Properties (Lines 62-66):
+       // MARK: - レシピキャッシュ
+
+       private(set) var cachedRecipes: [String: RecipeDetail] = [:]
+       private(set) var generatingDishes: Set<String> = []
+       private(set) var recipeErrors: [String: String] = [:]
+
+       These are published automatically via @Observable:
+       - cachedRecipes: Dictionary storing completed recipe details by dish name
+       - generatingDishes: Set tracking dishes currently being generated
+       - recipeErrors: Dictionary storing error messages by dish name
+
+       prefetchRecipes() Method (Lines 68-96):
+       func prefetchRecipes(for dishes: [String]) {
+           print("[ShoppingFill][prefetchRecipes] 要求dishes=\(dishes)")
+           for dish in dishes {
+               guard cachedRecipes[dish] == nil, !generatingDishes.contains(dish) else {
+                   print("[ShoppingFill][prefetchRecipes] スキップ（キャッシュ済み or 生成中）: \(dish)")
+                   continue
+               }
+               generatingDishes.insert(dish)
+               recipeErrors.removeValue(forKey: dish)
+               // ... generates recipes asynchronously and updates cachedRecipes
+               Task {
+                   do {
+                       let recipe = try await generateRecipe(for: dish)
+                       cachedRecipes[dish] = recipe
+                   } catch {
+                       recipeErrors[dish] = error.localizedDescription
+                   }
+                   generatingDishes.remove(dish)
+               }
+           }
+       }
+
+       ---
+       2. DashBordView.swift - Meal Plan Section
+
+       Daily Meal Plan Section (Lines 99-193):
+       The dailyMealPlanSection computed variable displays:
+       - Loading state (Line 114-126)
+       - Empty state with generation button (Lines 127-152)
+       - MealPlanCard list when plans exist (Lines 153-165)
+       - Error messages (Lines 135-140, 159-164)
+
+       MealPlanCard Component (Lines 427-480):
+       struct MealPlanCard: View {
+           let plan: MealPlan
+
+           var body: some View {
+               HStack(spacing: 14) {
+                   // 食事タイプアイコン
+                   ZStack {
+                       Circle()
+                           .fill(mealTypeColor.opacity(0.15))
+                           .frame(width: 46, height: 46)
+                       Image(systemName: mealTypeIcon)
+                           .foregroundColor(mealTypeColor)
+                   }
+                   VStack(alignment: .leading, spacing: 4) {
+                       Text(mealTypeLabel)  // "2/11 朝食"
+                       Text(plan.menuName)
+                           .font(.subheadline)
+                           .bold()
+                           .lineLimit(2)
+                   }
+                   Spacer()
+                   MealPlanStatusBadge(status: plan.status)
+               }
+           }
+       }
+
+       DishRecipeSection Usage in MealPlanDetailView (Lines 562-570):
+       ForEach(dishes, id: \.self) { dish in
+           DishRecipeSection(
+               dishName: dish,
+               recipe: IntelligenceService.shared.cachedRecipes[dish],
+               isGenerating: IntelligenceService.shared.generatingDishes.contains(dish),
+               error: IntelligenceService.shared.recipeErrors[dish],
+               onGenerate: { IntelligenceService.shared.prefetchRecipes(for: [dish]) }
+           )
+       }
+
+       State Management (Lines 52-81):
+       The dashboard observes changes to generatingDishes via .onChange(). When all recipes finish generating, it automatically calls autoFillShoppingList().
+
+       ---
+       3. DishRecipeSection Component Definition
+
+       Located in RecipeView.swift (Lines 77-209):
+
+       struct DishRecipeSection: View {
+           let dishName:     String
+           let recipe:       RecipeDetail?
+           let isGenerating: Bool
+           let error:        String?
+           let onGenerate:   () -> Void
+
+           var body: some View {
+               Section {
+                   if isGenerating {
+                       generatingRow  // ProgressView + "レシピを生成中..."
+                   } else if let recipe {
+                       recipeContent(recipe)  // Ingredients + Steps
+                   } else {
+                       if let error {
+                           Text(error)
+                               .font(.caption)
+                               .foregroundColor(.red)
+                       }
+                       generateButton
+                   }
+               } header: {
+                   Text(dishName)
+               }
+           }
+       }
+
+       Three States:
+       1. Generating: Shows ProgressView with "レシピを生成中..."
+       2. Success: Displays cooking time, ingredients, and steps
+       3. Empty/Error: Shows error message + "レシピを生成" button
+
+       ---
+       4. Current State Flow
+
+       1. User generates meal plan → generateTodayMealPlan() is called
+       2. prefetchDishes(from:) extracts dish names and calls IntelligenceService.shared.prefetchRecipes()
+       3. prefetchRecipes() adds dishes to generatingDishes, starts async recipe generation
+       4. Each recipe completion updates cachedRecipes and removes from generatingDishes
+       5. Dashboard's .onChange() detects when all dishes settle (cached or errored)
+       6. autoFillShoppingList() is automatically triggered
+       7. MealPlanDetailView displays DishRecipeSection for each parsed dish, observing cached recipes in real-time
+
+       All properties are automatically observed through @Observable, so UI updates instantly when recipes finish generating.
+  ⎿  Done (4 tool uses · 36.1k tokens · 17.5s)
+═══════════════════════════════════════════════════════════════════════════════════════════════════ Conversation compacted · ctrl+o for history ══════════════════════════════════════════════════════════════════════════════════════════════════
+
+> This session is being continued from a previous conversation that ran out of context. The conversation is summarized below:
+Analysis:
+Let me chronologically analyze the conversation to create a comprehensive summary.
+
+## Session Context (from previous summary)
+The conversation continues from a previous session where:
+1. A scan feature (in-app inventory auto-input) was fully implemented
+2. Settings screen enhancement was started (AppSettings.swift was updated with 4 new properties)
+
+## Current Session Analysis
+
+### Part 1: Continuing Settings Screen Work
+The session resumed from a summary, with pending tasks:
+- SettingsView.swift rewrite ✓
+- Wire expiryWarningDays into DashBordView.swift ✓
+- Wire showExpiredItems into StockItemView.swift ✓
+- Wire autoDeleteMatchedShoppingItems into ScanResultView.swift ✓
+- Update CODEBASE_GUIDE.md and IMPLEMENTATION_LOG.md ✓
+
+All these were completed in sequence.
+
+### Part 2: DevelopmentLog.md Update
+User requested updating DevelopmentLog.md per CLAUDE.md instructions. Added Session 5 (scan feature) and Session 6 (settings screen enhancement).
+
+### Part 3: Bug Fix - recipeAmount showing recipe content
+User reported: "食材の数量ではなくレシピの内容がそのまま表示されてしまうケースがありました" with the relevant code block.
+
+Investigation revealed:
+- `recipeAmount` in `ShoppingItem` is set from `MergedShoppingIngredient.combinedAmount`
+- `mergeShoppingIngredients()` in IntelligenceService calls Apple Intelligence to merge ingredients
+- AI sometimes returns recipe content instead of just a quantity string in the `combinedAmount` field
+
+Fix applied:
+1. `ShoppingAutoFillService.swift`: Add validation - reject `combinedAmount` strings > 20 chars
+2. `ShoppingListView.swift`: Add `.lineLimit(1)` as display-layer safety net
+
+### Part 4: New Feature Request (CURRENT)
+User requested:
+1. In-app notification when AI recipe generation is complete
+2. Show recipe generation status in the dashboard's meal plan section
+
+The exploration task was dispatched to understand:
+- IntelligenceService's `generatingDishes`, `cachedRecipes`, `recipeErrors` properties
+- How `DishRecipeSection` works
+- How `MealPlanCard` is displayed in the dashboard
+
+Key findings from exploration:
+- `IntelligenceService` is `@Observable` with `generatingDishes: Set<String>` and `cachedRecipes: [String: RecipeDetail]`
+- `DishRecipeSection` is in `RecipeView.swift` and shows generating/success/error states
+- `MealPlanCard` in `DashBordView.swift` currently shows NO recipe generation status
+- `dailyMealPlanSection` shows plans via `ForEach(plans) { plan in NavigationLink { MealPlanCard(plan:) } }`
+
+The user wants:
+1. **In-app notification** when all recipes finish — this could be a SwiftUI overlay/banner on the dashboard (since an actual push notification was already implemented in Session 7 for this purpose, we need an IN-APP notification like a
+toast/banner that appears while the app is open)
+2. **Dashboard recipe status indicator** on the meal plan section — show a small indicator on each MealPlanCard or in the section header when recipes are being generated
+
+What needs to be implemented:
+1. In `DashBordView.swift`, add an in-app notification banner/toast that appears when `generatingDishes` transitions from non-empty to empty (all recipes done)
+2. In `MealPlanCard`, add recipe generation progress indicator (e.g., small ProgressView or text like "レシピ生成中")
+3. In `dailyMealPlanSection`, possibly add a header/footer note about recipe generation status
+
+The summary request was received after the exploration task completed but BEFORE implementing these features. I need to clearly document that the next step is to implement these features.
+
+Summary:
+## 1. Primary Request and Intent
+
+### 完了済みリクエスト
+
+**セッション継続（設定画面拡充）:**
+前セッションで `AppSettings.swift` に4プロパティを追加済みの状態から再開し、以下を完了:
+- `SettingsView.swift` の全面再構成（8セクション構成の設定フォーム）
+- `BarcodeCache.reset()` の追加（Models.swift）
+- `DashBordView.swift` へ `expiryWarningDays` を組み込み（ハードコードの `7` を削除）
+- `StockItemView.swift` へ `showExpiredItems` フィルタを組み込み
+- `ScanResultView.swift` へ `autoDeleteMatchedShoppingItems` 条件分岐を組み込み
+- `CODEBASE_GUIDE.md`, `IMPLEMENTATION_LOG.md`, `DevelopmentLog.md` の更新
+
+**バグ報告・修正:**
+買い物リストの分量欄（`recipeAmount`）に「500g」等の分量ではなくレシピ本文が表示される不具合を修正。
+
+**新規機能リクエスト（実装中）:**
+> 「AIによる献立のレシピ生成が終了したらアプリ内で通知してください．通知の方法は問いません．また，レシピが生成中の場合はダッシュボードの献立のセクションにそれを明記してください．」
+
+2つの機能:
+1. レシピ生成完了時のアプリ内通知
+2. ダッシュボードの献立セクションにレシピ生成中状態の表示
+
+---
+
+## 2. Key Technical Concepts
+
+- **`@Observable` macro** — `IntelligenceService` / `AppSettings` の変更追跡。`@Observable` は SwiftUI コントロールに直接 `Binding` を渡せないため `Binding(get:set:)` でブリッジが必要
+- **`generatingDishes: Set<String>`** — 現在レシピ生成中の料理名セット。`@Observable` で変更が自動追跡される
+- **`cachedRecipes: [String: RecipeDetail]`** — 生成済みレシピのキャッシュ。空から非空への遷移でレシピ生成完了を検知できる
+- **`prefetchRecipes(for:)`** — 複数料理のレシピを並行生成し、完了次第 `cachedRecipes` に格納 / `generatingDishes` から除去
+- **`DishRecipeSection`** — `RecipeView.swift` で定義。生成中/完了/エラーの3状態を表示するコンポーネント
+- **SwiftData `ModelContext.delete(model:)`** — 設定画面の全データ削除に使用
+- **`BarcodeCache` (UserDefaults永続化)** — `reset()` メソッドで `UserDefaults.removeObject(forKey:)` を呼び出し
+- **`filteredItems` computed property** — `showExpiredItems = false` 時に `startOfDay` 比較で期限切れアイテムを除外
+- **AI出力バリデーション** — `combinedAmount` が20文字超の場合はレシピ本文混入とみなし `nil` に落とす
+
+---
+
+## 3. Files and Code Sections
+
+### `SmartChef/Models.swift` （変更）
+`BarcodeCache.reset()` を追加:
+```swift
+func reset() {
+    UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+}
+```
+
+### `SmartChef/SettingsView.swift` （全面再構成）
+8セクション構成。`@Observable` と SwiftUI コントロールのブリッジパターン:
+```swift
+Stepper(value: Binding(
+    get: { settings.servingsCount },
+    set: { settings.servingsCount = $0 }
+), in: 1...8) { ... }
+
+Picker("", selection: Binding(
+    get: { settings.expiryWarningDays },
+    set: { settings.expiryWarningDays = $0 }
+)) {
+    ForEach([3, 5, 7, 10, 14], id: \.self) { days in
+        Text("\(days)日前").tag(days)
+    }
+}
+```
+
+全データ削除:
+```swift
+private func clearAllData() {
+    try? modelContext.delete(model: StockItem.self)
+    try? modelContext.delete(model: MealPlan.self)
+    try? modelContext.delete(model: MealHistory.self)
+    try? modelContext.delete(model: ShoppingItem.self)
+    try? modelContext.save()
+}
+```
+
+`confirmationDialog` でバーコードキャッシュリセットと全データ削除を確認付きで実行。
+
+### `SmartChef/DashBordView.swift` （変更）
+`urgentItems()` のハードコード `7` を `settings.expiryWarningDays` に変更:
+```swift
+// 変更前
+let sevenDaysLater = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+
+// 変更後
+let threshold = Calendar.current.date(
+    byAdding: .day,
+    value: settings.expiryWarningDays,
+    to: Date()
+) ?? Date()
+```
+
+### `SmartChef/StockItemView.swift` （変更）
+`filteredItems` computed property を追加:
+```swift
+private let settings = AppSettings.shared
+
+private var filteredItems: [StockItem] {
+    guard !settings.showExpiredItems else { return items }
+    let today = Calendar.current.startOfDay(for: Date())
+    return items.filter { item in
+        guard let deadline = item.deadline else { return true }
+        return Calendar.current.startOfDay(for: deadline) >= today
+    }
+}
+
+private var groupedItems: [Category: [StockItem]] {
+    Dictionary(grouping: filteredItems, by: { $0.category })
+}
+```
+
+空状態判定も `items.isEmpty` → `filteredItems.isEmpty` に変更。
+
+### `SmartChef/ScanResultView.swift` （変更）
+`saveAllItems()` 内の削除ロジックを条件分岐:
+```swift
+if AppSettings.shared.autoDeleteMatchedShoppingItems {
+    for shoppingItem in matchedShoppingItems {
+        modelContext.delete(shoppingItem)
+    }
+}
+```
+
+完了オーバーレイのメッセージも同様に条件分岐:
+```swift
+if !matchedShoppingItems.isEmpty && AppSettings.shared.autoDeleteMatchedShoppingItems {
+    Text("買い物リストから\(matchedShoppingItems.count)件を削除しました")
+}
+```
+
+### `SmartChef/ShoppingAutoFillService.swift` （変更・バグ修正）
+`combinedAmount` の保存前バリデーション追加:
+```swift
+let validAmount: String? = {
+    let s = item.combinedAmount.trimmingCharacters(in: .whitespaces)
+    return (!s.isEmpty && s.count <= 20) ? s : nil
+}()
+
+let newItem = ShoppingItem(
+    name: item.name,
+    category: category,
+    count: 1,
+    isSelected: false,
+    sourceMenuName: sourceLabel.isEmpty ? nil : sourceLabel,
+    recipeAmount: validAmount  // ← nil-safe に変更
+)
+```
+
+### `SmartChef/ShoppingListView.swift` （変更・バグ修正）
+表示側の安全策として `.lineLimit(1)` 追加:
+```swift
+if let amount = item.recipeAmount, !amount.isEmpty {
+    Text(amount)
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)  // ← 追加
+}
+```
+
+### `DevelopmentLog.md` （更新）
+Session 5（スキャン機能）・Session 6（設定画面拡充）・Session 9（バグ修正）を追記。
+
+### 探索済み（変更なし）
+**`SmartChef/IntelligenceService.swift`** — 以下のプロパティが確認済み:
+```swift
+@Observable
+final class IntelligenceService {
+    static let shared = IntelligenceService()
+    private(set) var cachedRecipes: [String: RecipeDetail] = [:]
+    private(set) var generatingDishes: Set<String> = []
+    private(set) var recipeErrors: [String: String] = [:]
+
+    func prefetchRecipes(for dishes: [String]) {
+        for dish in dishes {
+            guard cachedRecipes[dish] == nil, !generatingDishes.contains(dish) else { continue }
+            generatingDishes.insert(dish)
+            Task {
+                do {
+                    let recipe = try await generateRecipe(for: dish)
+                    cachedRecipes[dish] = recipe
+                } catch { recipeErrors[dish] = error.localizedDescription }
+                generatingDishes.remove(dish)
+            }
+        }
+    }
+}
+```
+
+**`SmartChef/DashBordView.swift` の `MealPlanCard`** — 現在レシピ生成状態を一切表示していない:
+```swift
+struct MealPlanCard: View {
+    let plan: MealPlan
+    var body: some View {
+        HStack(spacing: 14) {
+            // 食事タイプアイコンのみ
+            // 献立名（太字）
+            // MealPlanStatusBadge
+            // ← レシピ生成状態の表示なし
+        }
+    }
+}
+```
+
+**`SmartChef/RecipeView.swift` の `DishRecipeSection`** — `MealPlanDetailView` の中でのみ使用。`isGenerating` フラグを受け取り生成中/完了/エラーを表示するが、ダッシュボードには未接続:
+```swift
+struct DishRecipeSection: View {
+    let dishName: String
+    let recipe: RecipeDetail?
+    let isGenerating: Bool
+    let error: String?
+    let onGenerate: () -> Void
+    // ...3状態表示
+}
+```
+
+---
+
+## 4. Errors and Fixes
+
+### バグ: 買い物リストの分量欄にレシピ本文が表示される
+- **原因**: `IntelligenceService.mergeShoppingIngredients()` が `combinedAmount` フィールドに分量ではなくレシピ説明文を返すことがある。`ShoppingAutoFillService` はこれを無検証で `recipeAmount` に保存していた
+- **修正**: 保存前バリデーション（20文字超 → `nil`） + 表示側 `.lineLimit(1)` の2段構え
+
+---
+
+## 5. Problem Solving
+
+- **`@Observable` と SwiftUI `Binding` のブリッジ**: `Stepper`/`Toggle`/`Picker` は `Binding` を要求するが `@Observable` プロパティは直接 `Analysis:
+Let me chronologically analyze the conversation to create a comprehensive summary.
+
+## Session Context (from previous summary)
+The conversation continues from a previous session where:
+1. A scan feature (in-app inventory auto-input) was fully implemented
+2. Settings screen enhancement was started (AppSettings.swift was updated with 4 new properties)
+
+## Current Session Analysis
+
+### Part 1: Continuing Settings Screen Work
+The session resumed from a summary, with pending tasks:
+- SettingsView.swift rewrite ✓
+- Wire expiryWarningDays into DashBordView.swift ✓
+- Wire showExpiredItems into StockItemView.swift ✓
+- Wire autoDeleteMatchedShoppingItems into ScanResultView.swift ✓
+- Update CODEBASE_GUIDE.md and IMPLEMENTATION_LOG.md ✓
+
+All these were completed in sequence.
+
+### Part 2: DevelopmentLog.md Update
+User requested updating DevelopmentLog.md per CLAUDE.md instructions. Added Session 5 (scan feature) and Session 6 (settings screen enhancement).
+
+### Part 3: Bug Fix - recipeAmount showing recipe content
+User reported: "食材の数量ではなくレシピの内容がそのまま表示されてしまうケースがありました" with the relevant code block.
+
+Investigation revealed:
+- `recipeAmount` in `ShoppingItem` is set from `MergedShoppingIngredient.combinedAmount`
+- `mergeShoppingIngredients()` in IntelligenceService calls Apple Intelligence to merge ingredients
+- AI sometimes returns recipe content instead of just a quantity string in the `combinedAmount` field
+
+Fix applied:
+1. `ShoppingAutoFillService.swift`: Add validation - reject `combinedAmount` strings > 20 chars
+2. `ShoppingListView.swift`: Add `.lineLimit(1)` as display-layer safety net
+
+### Part 4: New Feature Request (CURRENT)
+User requested:
+1. In-app notification when AI recipe generation is complete
+2. Show recipe generation status in the dashboard's meal plan section
+
+The exploration task was dispatched to understand:
+- IntelligenceService's `generatingDishes`, `cachedRecipes`, `recipeErrors` properties
+- How `DishRecipeSection` works
+- How `MealPlanCard` is displayed in the dashboard
+
+Key findings from exploration:
+- `IntelligenceService` is `@Observable` with `generatingDishes: Set<String>` and `cachedRecipes: [String: RecipeDetail]`
+- `DishRecipeSection` is in `RecipeView.swift` and shows generating/success/error states
+- `MealPlanCard` in `DashBordView.swift` currently shows NO recipe generation status
+- `dailyMealPlanSection` shows plans via `ForEach(plans) { plan in NavigationLink { MealPlanCard(plan:) } }`
+
+The user wants:
+1. **In-app notification** when all recipes finish — this could be a SwiftUI overlay/banner on the dashboard (since an actual push notification was already implemented in Session 7 for this purpose, we need an IN-APP notification like a
+toast/banner that appears while the app is open)
+2. **Dashboard recipe status indicator** on the meal plan section — show a small indicator on each MealPlanCard or in the section header when recipes are being generated
+
+What needs to be implemented:
+1. In `DashBordView.swift`, add an in-app notification banner/toast that appears when `generatingDishes` transitions from non-empty to empty (all recipes done)
+2. In `MealPlanCard`, add recipe generation progress indicator (e.g., small ProgressView or text like "レシピ生成中")
+3. In `dailyMealPlanSection`, possibly add a header/footer note about recipe generation status
+
+The summary request was received after the exploration task completed but BEFORE implementing these features. I need to clearly document that the next step is to implement these features.
+
+ で `Binding` を生成できないため、`Binding(get:set:)` パターンでブリッジ
+- **AI出力の信頼性問題**: AI が指定フォーマット外の値を返すことへの対策として、文字数制限バリデーションを保存層と表示層の両方に実装
+
+---
+
+## 6. All User Messages
+
+1. **（セッション継続）** — 前のコンテキストサマリーからの再開。ペンディングタスク（SettingsView.swift の書き換え等）を引き継いで継続
+
+2. **「@CLAUDE.mdに書いてある通り，@DevelopmentLog.mdを更新してください．」** — CLAUDE.md の指示に従い DevelopmentLog.md に Session 5・6 を追記するよう依頼
+
+3. **バグ報告（コードスニペット付き）**:
+```swift
+// 自動追加: レシピ分量を表示 / 手動追加: 個数を表示
+if let amount = item.recipeAmount, !amount.isEmpty {
+    Text(amount)
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+} else {
+    Text("\(item.count)個")
+        ...
+}
+// 食材の数量ではなくレシピの内容がそのまま表示されてしまうケースがありました．
+```
+
+4. **新機能リクエスト**: 「AIによる献立のレシピ生成が終了したらアプリ内で通知してください．通知の方法は問いません．また，レシピが生成中の場合はダッシュボードの献立のセクションにそれを明記してください．」
+
+---
+
+## 7. Pending Tasks
+
+1. **アプリ内レシピ生成完了通知の実装** — `generatingDishes` が非空→空に遷移したタイミングでアプリ内トースト/バナーを表示
+2. **ダッシュボード献立セクションにレシピ生成中状態を明記** — `MealPlanCard` または `dailyMealPlanSection` のヘッダー/フッターに生成中インジケーターを追加
+3. **DevelopmentLog.md の更新** — 上記実装後に Session 10 として記録
+
+---
+
+## 8. Current Work
+
+新機能「レシピ生成完了のアプリ内通知」と「ダッシュボードのレシピ生成状態表示」の実装準備として、以下の探索が完了した状態：
+
+- `IntelligenceService` の `generatingDishes`/`cachedRecipes` プロパティ構造の把握
+- `DishRecipeSection` コンポーネントの仕様確認（`RecipeView.swift` に定義）
+- `MealPlanCard` が現在レシピ生成状態を一切表示していないことを確認
+- `dailyMealPlanSection` のレンダリング構造の確認
+
+**実装すべき内容の設計:**
+- `DashBordView` に `@State private var showRecipeReadyBanner = false` を追加し、`generatingDishes` が空になったタイミング（`onChange`）でバナー表示
+- `MealPlanCard` に料理名を解析して `generatingDishes.contains(dish)` でインジケーターを表示
+- または `dailyMealPlanSection` のフッターにセクション全体の生成進捗を表示
+
+---
+
+## 9. Optional Next Step
+
+ユーザーの最新リクエスト通り、以下2点を実装する:
+
+> 「AIによる献立のレシピ生成が終了したらアプリ内で通知してください．通知の方法は問いません．また，レシピが生成中の場合はダッシュボードの献立のセクションにそれを明記してください．」
+
+**実装方針:**
+
+1. **`DashBordView.swift`** — `generatingDishes` の `.onChange` で全生成完了を検知し、オーバーレイトーストを表示（既存の `barcodeToastMessage` パターンと同様の実装）
+
+2. **`MealPlanCard` または `dailyMealPlanSection`** — `IntelligenceService.shared.generatingDishes` を参照し、プランの料理名が生成中の場合にインジケーター（`ProgressView` + "レシピ生成中"テキスト）を表示。`@Observable` なので `let
+intelligence = IntelligenceService.shared` を `private let` で保持するだけで自動的に再描画される.
+Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on.
+  ⎿  Referenced file DevelopmentLog.md
+  ⎿  Read SmartChef/ShoppingListView.swift (209 lines)
+  ⎿  Read SmartChef/ShoppingAutoFillService.swift (135 lines)
+  ⎿  Referenced file SmartChef/IntelligenceService.swift
+  ⎿  Referenced file IMPLEMENTATION_LOG.md
+  ⎿  Spending cap reached resets 6pm
+     /upgrade to increase your usage limit.                                                                                                                                                                          02:57 PM  <synthetic>
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Showing detailed transcript · Ctrl+O to toggle

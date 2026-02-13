@@ -9,6 +9,11 @@ import SwiftUI
 
 // MARK: - レシピ一覧ビュー
 
+// MARK: - レシピ一覧ビュー (未使用・非推奨)
+// IntelligenceService のキャッシュ廃止に伴い、このビューは現在機能しません。
+// 必要に応じて MealPlan ベースの実装へ修正してください。
+
+/*
 struct RecipeView: View {
     let menuName: String
 
@@ -71,15 +76,16 @@ struct RecipeView: View {
         }
     }
 }
+*/
 
 // MARK: - 1品のレシピセクション
 
 struct DishRecipeSection: View {
-    let dishName:     String
-    let recipe:       RecipeDetail?
+    let dishName: String
+    let recipe: RecipeDetail?
     let isGenerating: Bool
-    let error:        String?
-    let onGenerate:   () -> Void
+    let error: String?
+    let onGenerate: () -> Void
 
     var body: some View {
         Section {
@@ -210,8 +216,10 @@ struct DishRecipeSection: View {
 
 // MARK: - Preview
 
+/*
 #Preview {
     NavigationStack {
         RecipeView(menuName: "鶏もも肉の照り焼き・ほうれん草の胡麻和え・豆腐の味噌汁・白米")
     }
 }
+*/
